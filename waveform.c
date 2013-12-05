@@ -61,8 +61,11 @@ static DB_misc_t            plugin;
 static DB_functions_t *     deadbeef = NULL;
 static ddb_gtkui_t *        gtkui_plugin = NULL;
 
-typedef struct {
+typedef struct
+{
     ddb_gtkui_widget_t base;
+    GtkWidget *popup;
+    GtkWidget *popup_item;
     GtkWidget *drawarea;
     guint drawtimer;
     guint resizetimer;
@@ -110,30 +113,24 @@ enum WHAT { PEAK = 1, RMS = 2 };
 
 static gboolean CONFIG_LOG_ENABLED = FALSE;
 static gboolean CONFIG_MIX_TO_MONO = FALSE;
-static gint     CONFIG_BG_COLOR_R =    200;
-static gint     CONFIG_BG_COLOR_G =    200;
-static gint     CONFIG_BG_COLOR_B =    200;
-static gint     CONFIG_FG_COLOR_R =      0;
-static gint     CONFIG_FG_COLOR_G =      0;
-static gint     CONFIG_FG_COLOR_B =      0;
-static gint     CONFIG_PB_COLOR_R =      0;
-static gint     CONFIG_PB_COLOR_G =    255;
-static gint     CONFIG_PB_COLOR_B =      0;
+static GdkColor CONFIG_BG_COLOR;
+static GdkColor CONFIG_FG_COLOR;
+static GdkColor CONFIG_PB_COLOR;
 
 static void
 save_config (void)
 {
     deadbeef->conf_set_int (CONFSTR_WF_LOG_ENABLED,   CONFIG_LOG_ENABLED);
     deadbeef->conf_set_int (CONFSTR_WF_MIX_TO_MONO,   CONFIG_MIX_TO_MONO);
-    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,    CONFIG_BG_COLOR_R);
-    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_G,    CONFIG_BG_COLOR_G);
-    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_B,    CONFIG_BG_COLOR_B);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_R,    CONFIG_FG_COLOR_R);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_G,    CONFIG_FG_COLOR_G);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_B,    CONFIG_FG_COLOR_B);
-    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_R,    CONFIG_PB_COLOR_R);
-    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_G,    CONFIG_PB_COLOR_G);
-    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_B,    CONFIG_PB_COLOR_B);
+    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,    CONFIG_BG_COLOR.red);
+    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_G,    CONFIG_BG_COLOR.green);
+    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_B,    CONFIG_BG_COLOR.blue);
+    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_R,    CONFIG_FG_COLOR.red);
+    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_G,    CONFIG_FG_COLOR.green);
+    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_B,    CONFIG_FG_COLOR.blue);
+    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_R,    CONFIG_PB_COLOR.red);
+    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_G,    CONFIG_PB_COLOR.green);
+    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_B,    CONFIG_PB_COLOR.blue);
 }
 
 static void
@@ -142,15 +139,15 @@ load_config (void)
     deadbeef->conf_lock ();
     CONFIG_LOG_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_LOG_ENABLED,    FALSE);
     CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,    FALSE);
-    CONFIG_BG_COLOR_R = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,        200);
-    CONFIG_BG_COLOR_G = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,        200);
-    CONFIG_BG_COLOR_B = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_B,        200);
-    CONFIG_FG_COLOR_R = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_R,          0);
-    CONFIG_FG_COLOR_G = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_G,          0);
-    CONFIG_FG_COLOR_B = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_B,          0);
-    CONFIG_PB_COLOR_R = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_R,          0);
-    CONFIG_PB_COLOR_G = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_G,        255);
-    CONFIG_PB_COLOR_B = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_B,          0);
+    CONFIG_BG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,      55000);
+    CONFIG_BG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,      55000);
+    CONFIG_BG_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_B,      55000);
+    CONFIG_FG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_R,          0);
+    CONFIG_FG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_G,          0);
+    CONFIG_FG_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_B,          0);
+    CONFIG_PB_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_R,          0);
+    CONFIG_PB_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_G,      65535);
+    CONFIG_PB_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_B,          0);
     deadbeef->conf_unlock ();
 }
 
@@ -159,21 +156,22 @@ on_config_changed (uintptr_t ctx)
 {
     gboolean log_enabled = CONFIG_LOG_ENABLED;
     gboolean mix_to_mono = CONFIG_MIX_TO_MONO;
-    gint background_color_r = CONFIG_BG_COLOR_R;
-    gint background_color_g = CONFIG_BG_COLOR_G;
-    gint background_color_b = CONFIG_BG_COLOR_B;
-    gint foreground_color_r = CONFIG_FG_COLOR_R;
-    gint foreground_color_g = CONFIG_FG_COLOR_G;
-    gint foreground_color_b = CONFIG_FG_COLOR_B;
-    gint progressbar_color_r = CONFIG_PB_COLOR_R;
-    gint progressbar_color_g = CONFIG_PB_COLOR_G;
-    gint progressbar_color_b = CONFIG_PB_COLOR_B;
+    gint background_color_r = CONFIG_BG_COLOR.red;
+    gint background_color_g = CONFIG_BG_COLOR.green;
+    gint background_color_b = CONFIG_BG_COLOR.blue;
+    gint foreground_color_r = CONFIG_FG_COLOR.red;
+    gint foreground_color_g = CONFIG_FG_COLOR.green;
+    gint foreground_color_b = CONFIG_FG_COLOR.blue;
+    gint progressbar_color_r = CONFIG_PB_COLOR.red;
+    gint progressbar_color_g = CONFIG_PB_COLOR.green;
+    gint progressbar_color_b = CONFIG_PB_COLOR.blue;
     load_config ();
     return 0;
 }
 
 void
-w_waveform_destroy (ddb_gtkui_widget_t *widget) {
+w_waveform_destroy (ddb_gtkui_widget_t *widget)
+{
     w_waveform_t *w = (w_waveform_t *)widget;
     if (w->drawtimer) {
         g_source_remove (w->drawtimer);
@@ -197,14 +195,16 @@ gboolean
 waveform_render (gpointer user_data);
 
 gboolean
-w_waveform_draw_cb (void *data) {
+w_waveform_draw_cb (void *data)
+{
     w_waveform_t *w = data;
     gtk_widget_queue_draw (w->drawarea);
     return TRUE;
 }
 
 static gboolean
-waveform_redraw_cb (void *user_data) {
+waveform_redraw_cb (void *user_data)
+{
     w_waveform_t *w = user_data;
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
     waveform_render (w);
@@ -213,7 +213,8 @@ waveform_redraw_cb (void *user_data) {
 }
 
 static gboolean
-waveform_redraw_thread (void *user_data) {
+waveform_redraw_thread (void *user_data)
+{
     w_waveform_t *w = user_data;
     w->resizetimer = 0;
     intptr_t tid = deadbeef->thread_start (waveform_render, w);
@@ -223,7 +224,8 @@ waveform_redraw_thread (void *user_data) {
 }
 
 static inline void
-_draw_vline (uint8_t *data, int stride, int x0, int y0, int y1) {
+_draw_vline (uint8_t *data, int stride, int x0, int y0, int y1)
+{
     if (y0 > y1) {
         int tmp = y0;
         y0 = y1;
@@ -261,13 +263,15 @@ alt_log_meter (float power)
     return _log_meter (power, -192.0, 0.0, 8.0);
 }
 
-static inline float coefficient_to_dB (float coeff) {
+static inline float coefficient_to_dB (float coeff)
+{
     return 20.0f * log10 (coeff);
 }
 /* end of ardour copy */
 
 #ifdef EQUAL_VSPACE_LOG_TICKS
-static inline float dB_to_coefficient (float dB) {
+static inline float dB_to_coefficient (float dB)
+{
     return dB > -318.8f ? pow (10.0f, dB * 0.05f) : 0.0f;
 }
 
@@ -338,11 +342,11 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
     cairo_paint (cr);
     cairo_restore (cr);
 
-    cairo_set_source_rgba (cr,(float)CONFIG_PB_COLOR_R/255,(float)CONFIG_PB_COLOR_G/255,(float)CONFIG_PB_COLOR_B/255,0.3);
+    cairo_set_source_rgba (cr,(float)CONFIG_PB_COLOR.red/65535,(float)CONFIG_PB_COLOR.green/65535,(float)CONFIG_PB_COLOR.blue/65535,0.3);
     cairo_rectangle (cr, 0, 0, pos, a.height);
     cairo_fill (cr);
 
-    cairo_set_source_rgb (cr,(float)CONFIG_PB_COLOR_R/255,(float)CONFIG_PB_COLOR_G/255,(float)CONFIG_PB_COLOR_B/255);
+    cairo_set_source_rgb (cr,(float)CONFIG_PB_COLOR.red/65535,(float)CONFIG_PB_COLOR.green/65535,(float)CONFIG_PB_COLOR.blue/65535);
     cairo_rectangle (cr, pos-3, 0, 3, a.height);
     cairo_fill (cr);
     return TRUE;
@@ -380,12 +384,12 @@ waveform_render (void *user_data)
         /*border*/ FALSE,
         /*geometry_no_border*/ FALSE,
         /*logscale*/ CONFIG_LOG_ENABLED, /*rectified*/ FALSE,
-        /*foreground*/  { (float)CONFIG_FG_COLOR_R/255,(float)CONFIG_FG_COLOR_G/255,(float)CONFIG_FG_COLOR_B/255, 0.6 },
-        /*wave-rms*/    { (float)CONFIG_FG_COLOR_R/255,(float)CONFIG_FG_COLOR_G/255,(float)CONFIG_FG_COLOR_B/255, 1.0 },
-        /*background*/  { (float)CONFIG_BG_COLOR_R/255,(float)CONFIG_BG_COLOR_G/255,(float)CONFIG_BG_COLOR_B/255, 0.5 },
+        /*foreground*/  { (float)CONFIG_FG_COLOR.red/65535,(float)CONFIG_FG_COLOR.green/65535,(float)CONFIG_FG_COLOR.blue/65535, 0.6 },
+        /*wave-rms*/    { (float)CONFIG_FG_COLOR.red/65535,(float)CONFIG_FG_COLOR.green/65535,(float)CONFIG_FG_COLOR.blue/65535, 1.0 },
+        /*background*/  { (float)CONFIG_BG_COLOR.red/65535,(float)CONFIG_BG_COLOR.green/65535,(float)CONFIG_BG_COLOR.blue/65535, 0.5 },
         /*annotation*/  { 1.0, 1.0, 1.0, 1.0 },
         /*border-bg*/   { 0.0, 0.0, 0.0, 0.7 },
-        /*center-line*/ { (float)CONFIG_FG_COLOR_R/255,(float)CONFIG_FG_COLOR_G/255,(float)CONFIG_FG_COLOR_B/255, 0.3 },
+        /*center-line*/ { (float)CONFIG_FG_COLOR.red/65535,(float)CONFIG_FG_COLOR.green/65535,(float)CONFIG_FG_COLOR.blue/65535, 0.3 },
         /*timecode num*/ 0, /*den*/ 0, /*offset*/ 0.0,
         /*parse BWF*/ TRUE,
         /*border-width*/ 2.0f,
@@ -434,7 +438,7 @@ waveform_render (void *user_data)
         cairo_set_line_width (temp_cr, render.border_width);
         cairo_rectangle (temp_cr, left, 0, a.width, a.height);
         cairo_stroke_preserve (temp_cr);
-        cairo_set_source_rgba (temp_cr,(float)CONFIG_BG_COLOR_R/255,(float)CONFIG_BG_COLOR_G/255,(float)CONFIG_BG_COLOR_B/255,1);
+        cairo_set_source_rgba (temp_cr,(float)CONFIG_BG_COLOR.red/65535,(float)CONFIG_BG_COLOR.green/65535,(float)CONFIG_BG_COLOR.blue/65535,1);
         cairo_fill (temp_cr);
         cairo_set_line_width (temp_cr, 1.0);
 
@@ -813,6 +817,10 @@ gboolean
 waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
     w_waveform_t *w = user_data;
+    if (event->button == 3)
+    {
+      return TRUE;
+    }
     w->seekbar_moving = 1;
     w->seekbar_moved = 0.0;
     GtkAllocation a;
@@ -825,6 +833,11 @@ gboolean
 waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
     w_waveform_t *w = user_data;
+    if (event->button == 3)
+    {
+      gtk_menu_popup (GTK_MENU (w->popup), NULL, NULL, NULL, w->drawarea, 0, gtk_get_current_event_time());
+      return TRUE;
+    }
     w->seekbar_moving = 0;
     w->seekbar_moved = 1.0;
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
@@ -843,7 +856,8 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
 }
 
 static int
-waveform_message (ddb_gtkui_widget_t *w, uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2) {
+waveform_message (ddb_gtkui_widget_t *w, uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2)
+{
     w_waveform_t *ca = (w_waveform_t *)w;
     intptr_t tid;
     switch (id) {
@@ -873,8 +887,155 @@ waveform_message (ddb_gtkui_widget_t *w, uint32_t id, uintptr_t ctx, uint32_t p1
     return 0;
 }
 
+static void
+on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
+    GtkWidget *waveform_properties;
+    GtkWidget *config_dialog;
+    GtkWidget *vbox01;
+    GtkWidget *label00;
+    GtkWidget *frame01;
+    GtkWidget *hbox01;
+    GtkWidget *vbox11;
+    GtkWidget *label01;
+    GtkWidget *background_color;
+    GtkWidget *vbox12;
+    GtkWidget *label02;
+    GtkWidget *foreground_color;
+    GtkWidget *vbox13;
+    GtkWidget *label03;
+    GtkWidget *progressbar_color;
+    GtkWidget *downmix_to_mono;
+    GtkWidget *log_scale;
+    GtkWidget *dialog_action_area13;
+    GtkWidget *applybutton1;
+    GtkWidget *cancelbutton1;
+    GtkWidget *okbutton1;
+
+    waveform_properties = gtk_dialog_new ();
+    gtk_widget_set_size_request (waveform_properties, -1, 300);
+    gtk_window_set_title (GTK_WINDOW (waveform_properties), "Waveform Properties");
+    gtk_window_set_type_hint (GTK_WINDOW (waveform_properties), GDK_WINDOW_TYPE_HINT_DIALOG);
+
+    config_dialog = gtk_dialog_get_content_area (GTK_DIALOG (waveform_properties));
+    gtk_widget_show (config_dialog);
+
+    vbox01 = gtk_vbox_new (FALSE, 8);
+    gtk_widget_show (vbox01);
+    gtk_box_pack_start (GTK_BOX (config_dialog), vbox01, FALSE, FALSE, 0);
+    gtk_container_set_border_width (GTK_CONTAINER (vbox01), 12);
+
+    label00 = gtk_label_new (NULL);
+    gtk_label_set_markup (GTK_LABEL(label00),"<b>Colors</b>");
+    gtk_widget_show (label00);
+
+    frame01 = gtk_frame_new ("Colors");
+    gtk_frame_set_label_widget ((GtkFrame *)frame01, label00);
+    gtk_frame_set_shadow_type ((GtkFrame *)frame01, GTK_SHADOW_IN);
+    gtk_widget_show (frame01);
+    gtk_box_pack_start (GTK_BOX (vbox01), frame01, FALSE, FALSE, 0);
+
+    hbox01 = gtk_hbox_new (FALSE, 8);
+    gtk_widget_show (hbox01);
+    gtk_container_add (GTK_CONTAINER (frame01), hbox01);
+    gtk_container_set_border_width (GTK_CONTAINER (hbox01), 6);
+
+    vbox11 = gtk_vbox_new (FALSE, 8);
+    gtk_widget_show (vbox11);
+    gtk_box_pack_start (GTK_BOX (hbox01), vbox11, TRUE, FALSE, 0);
+    // gtk_container_set_border_width (GTK_CONTAINER (frame01), 6);
+
+    label01 = gtk_label_new ("Background");
+    gtk_widget_show (label01);
+    gtk_box_pack_start (GTK_BOX (vbox11), label01, FALSE, FALSE, 0);
+
+    background_color = gtk_color_button_new ();
+    gtk_widget_show (background_color);
+    gtk_box_pack_start (GTK_BOX (vbox11), background_color, FALSE, FALSE, 0);
+
+    vbox12 = gtk_vbox_new (FALSE, 8);
+    gtk_widget_show (vbox12);
+    gtk_box_pack_start (GTK_BOX (hbox01), vbox12, TRUE, FALSE, 0);
+    // gtk_container_set_border_width (GTK_CONTAINER (vbox12), 6);
+
+    label02 = gtk_label_new ("Foreground");
+    gtk_widget_show (label02);
+    gtk_box_pack_start (GTK_BOX (vbox12), label02, FALSE, FALSE, 0);
+
+    foreground_color = gtk_color_button_new ();
+    gtk_widget_show (foreground_color);
+    gtk_box_pack_start (GTK_BOX (vbox12), foreground_color, FALSE, FALSE, 0);
+
+    vbox13 = gtk_vbox_new (FALSE, 8);
+    gtk_widget_show (vbox13);
+    gtk_box_pack_start (GTK_BOX (hbox01), vbox13, TRUE, FALSE, 0);
+    // gtk_container_set_border_width (GTK_CONTAINER (frame01), 6);
+
+    label03 = gtk_label_new ("Progressbar");
+    gtk_widget_show (label03);
+    gtk_box_pack_start (GTK_BOX (vbox13), label03, FALSE, FALSE, 0);
+
+    progressbar_color = gtk_color_button_new ();
+    gtk_widget_show (progressbar_color);
+    gtk_box_pack_start (GTK_BOX (vbox13), progressbar_color, FALSE, FALSE, 0);
+
+    downmix_to_mono = gtk_check_button_new_with_mnemonic ("Downmix to mono");
+    gtk_widget_show (downmix_to_mono);
+    gtk_box_pack_start (GTK_BOX (vbox01), downmix_to_mono, FALSE, FALSE, 0);
+
+    log_scale = gtk_check_button_new_with_mnemonic ("Logarithmic");
+    gtk_widget_show (log_scale);
+    gtk_box_pack_start (GTK_BOX (vbox01), log_scale, FALSE, FALSE, 0);
+
+    dialog_action_area13 = gtk_dialog_get_action_area (GTK_DIALOG (waveform_properties));
+    gtk_widget_show (dialog_action_area13);
+    gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area13), GTK_BUTTONBOX_END);
+
+    applybutton1 = gtk_button_new_from_stock ("gtk-apply");
+    gtk_widget_show (applybutton1);
+    gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), applybutton1, GTK_RESPONSE_APPLY);
+    gtk_widget_set_can_default(applybutton1, TRUE);
+
+    cancelbutton1 = gtk_button_new_from_stock ("gtk-cancel");
+    gtk_widget_show (cancelbutton1);
+    gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), cancelbutton1, GTK_RESPONSE_CANCEL);
+    gtk_widget_set_can_default(cancelbutton1, TRUE);
+
+    okbutton1 = gtk_button_new_from_stock ("gtk-ok");
+    gtk_widget_show (okbutton1);
+    gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), okbutton1, GTK_RESPONSE_OK);
+    gtk_widget_set_can_default(okbutton1, TRUE);
+
+    // GtkWidget *downmix_to_mono = lookup_widget (dlg, "downmix_to_mono");
+    gtk_color_button_set_color (GTK_COLOR_BUTTON (background_color), &CONFIG_BG_COLOR);
+    gtk_color_button_set_color (GTK_COLOR_BUTTON (foreground_color), &CONFIG_FG_COLOR);
+    gtk_color_button_set_color (GTK_COLOR_BUTTON (progressbar_color), &CONFIG_PB_COLOR);
+
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (downmix_to_mono), CONFIG_MIX_TO_MONO);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (log_scale), CONFIG_LOG_ENABLED);
+
+    for (;;) {
+        int response = gtk_dialog_run (GTK_DIALOG (waveform_properties));
+        if (response == GTK_RESPONSE_OK || response == GTK_RESPONSE_APPLY) {
+            gtk_color_button_get_color (GTK_COLOR_BUTTON (background_color), &CONFIG_BG_COLOR);
+            gtk_color_button_get_color (GTK_COLOR_BUTTON (foreground_color), &CONFIG_FG_COLOR);
+            gtk_color_button_get_color (GTK_COLOR_BUTTON (progressbar_color), &CONFIG_PB_COLOR);
+            CONFIG_MIX_TO_MONO = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (downmix_to_mono));
+            CONFIG_LOG_ENABLED = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (log_scale));
+            save_config ();
+            deadbeef->sendmessage (DB_EV_CONFIGCHANGED, 0, 0, 0);
+        }
+        if (response == GTK_RESPONSE_APPLY) {
+            continue;
+        }
+        break;
+    }
+    gtk_widget_destroy (waveform_properties);
+    return;
+}
+
 void
-w_waveform_init (ddb_gtkui_widget_t *w) {
+w_waveform_init (ddb_gtkui_widget_t *w)
+{
     w_waveform_t *wf = (w_waveform_t *)w;
     wf->max_buffer_len = VALUES_PER_FRAME * sizeof(float) * MAX_VALUES_PER_CHANNEL * 4;
     deadbeef->mutex_lock (wf->mutex);
@@ -893,7 +1054,8 @@ w_waveform_init (ddb_gtkui_widget_t *w) {
 }
 
 static ddb_gtkui_widget_t *
-w_waveform_create (void) {
+w_waveform_create (void)
+{
     w_waveform_t *w = malloc (sizeof (w_waveform_t));
     memset (w, 0, sizeof (w_waveform_t));
 
@@ -902,9 +1064,16 @@ w_waveform_create (void) {
     w->base.destroy = w_waveform_destroy;
     w->base.message = waveform_message;
     w->drawarea = gtk_drawing_area_new ();
+    w->popup = gtk_menu_new ();
+    w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
     gtk_widget_show (w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->drawarea);
+    gtk_widget_show (w->popup);
+    gtk_container_add (GTK_CONTAINER (w->base.widget), w->popup);
+    gtk_widget_show (w->popup_item);
+    gtk_container_add (GTK_CONTAINER (w->popup), w->popup_item);
+
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect_after ((gpointer) w->drawarea, "expose_event", G_CALLBACK (waveform_expose_event), w);
 #else
@@ -914,6 +1083,7 @@ w_waveform_create (void) {
     g_signal_connect_after ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (waveform_button_press_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "button_release_event", G_CALLBACK (waveform_button_release_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "motion_notify_event", G_CALLBACK (waveform_motion_notify_event), w);
+    g_signal_connect_after ((gpointer) w->popup_item, "activate", G_CALLBACK (on_button_config), w);
     gtkui_plugin->w_override_signals (w->base.widget, w);
     return (ddb_gtkui_widget_t *)w;
 }
@@ -966,6 +1136,7 @@ waveform_disconnect (void)
     return 0;
 }
 
+/*
 static const char settings_dlg[] =
     "property \"Logarithmic scale \"                     checkbox "      CONFSTR_WF_LOG_ENABLED        " 0 ;\n"
     "property \"Downmix to mono \"                     checkbox "      CONFSTR_WF_MIX_TO_MONO        " 0 ;\n"
@@ -979,7 +1150,7 @@ static const char settings_dlg[] =
     "property \"Progressbar color (g): \"         spinbtn[0,255,1] "      CONFSTR_WF_PB_COLOR_G        " 0 ;\n"
     "property \"Progressbar color (b): \"         spinbtn[0,255,1] "      CONFSTR_WF_PB_COLOR_B        " 0 ;\n"
 ;
-
+*/
 static DB_misc_t plugin = {
     //DB_PLUGIN_SET_API_VERSION
     .plugin.type            = DB_PLUGIN_MISC,
@@ -1014,7 +1185,7 @@ static DB_misc_t plugin = {
     .plugin.stop            = waveform_stop,
     .plugin.connect         = waveform_connect,
     .plugin.disconnect      = waveform_disconnect,
-    .plugin.configdialog    = settings_dlg,
+    // .plugin.configdialog    = settings_dlg,
 };
 
 DB_plugin_t *
