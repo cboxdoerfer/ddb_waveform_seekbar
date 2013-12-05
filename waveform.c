@@ -38,14 +38,16 @@
 
 #define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
-#define BORDER_LINE_WIDTH   (2.0)
-
+#define BORDER_LINE_WIDTH   (1.8)
+#define BARS (1)
+#define SPIKES (2)
 // min, max, rms
 #define VALUES_PER_FRAME (3)
 #define MAX_VALUES_PER_CHANNEL (4096)
 
 #define     CONFSTR_WF_LOG_ENABLED       "waveform.log_enabled"
 #define     CONFSTR_WF_MIX_TO_MONO       "waveform.mix_to_mono"
+#define     CONFSTR_WF_RENDER_METHOD     "waveform.render_method"
 #define     CONFSTR_WF_BG_COLOR_R        "waveform.bg_color_r"
 #define     CONFSTR_WF_BG_COLOR_G        "waveform.bg_color_g"
 #define     CONFSTR_WF_BG_COLOR_B        "waveform.bg_color_b"
@@ -116,12 +118,14 @@ static gboolean CONFIG_MIX_TO_MONO = FALSE;
 static GdkColor CONFIG_BG_COLOR;
 static GdkColor CONFIG_FG_COLOR;
 static GdkColor CONFIG_PB_COLOR;
+static gint     CONFIG_RENDER_METHOD = SPIKES;
 
 static void
 save_config (void)
 {
     deadbeef->conf_set_int (CONFSTR_WF_LOG_ENABLED,   CONFIG_LOG_ENABLED);
     deadbeef->conf_set_int (CONFSTR_WF_MIX_TO_MONO,   CONFIG_MIX_TO_MONO);
+    deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,   CONFIG_RENDER_METHOD);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,    CONFIG_BG_COLOR.red);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_G,    CONFIG_BG_COLOR.green);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_B,    CONFIG_BG_COLOR.blue);
@@ -137,17 +141,18 @@ static void
 load_config (void)
 {
     deadbeef->conf_lock ();
-    CONFIG_LOG_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_LOG_ENABLED,    FALSE);
-    CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,    FALSE);
+    CONFIG_LOG_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_LOG_ENABLED,      FALSE);
+    CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,      FALSE);
+    CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD, SPIKES);
     CONFIG_BG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,      55000);
-    CONFIG_BG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,      55000);
-    CONFIG_BG_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_B,      55000);
+    CONFIG_BG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,    55000);
+    CONFIG_BG_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_B,     55000);
     CONFIG_FG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_R,          0);
-    CONFIG_FG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_G,          0);
-    CONFIG_FG_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_B,          0);
+    CONFIG_FG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_G,        0);
+    CONFIG_FG_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_B,         0);
     CONFIG_PB_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_R,          0);
-    CONFIG_PB_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_G,      65535);
-    CONFIG_PB_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_B,          0);
+    CONFIG_PB_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_G,    65535);
+    CONFIG_PB_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_B,         0);
     deadbeef->conf_unlock ();
 }
 
@@ -374,7 +379,7 @@ waveform_render (void *user_data)
         /*background*/  { (float)CONFIG_BG_COLOR.red/65535,(float)CONFIG_BG_COLOR.green/65535,(float)CONFIG_BG_COLOR.blue/65535, 0.5 },
         /*annotation*/  { 1.0, 1.0, 1.0, 1.0 },
         /*border-bg*/   { 0.0, 0.0, 0.0, 0.7 },
-        /*center-line*/ { (float)CONFIG_FG_COLOR.red/65535,(float)CONFIG_FG_COLOR.green/65535,(float)CONFIG_FG_COLOR.blue/65535, 0.3 },
+        /*center-line*/ { (float)CONFIG_FG_COLOR.red/65535,(float)CONFIG_FG_COLOR.green/65535,(float)CONFIG_FG_COLOR.blue/65535, 0.6 },
         /*timecode num*/ 0, /*den*/ 0, /*offset*/ 0.0,
         /*parse BWF*/ TRUE,
         /*border-width*/ 2.0f,
@@ -458,6 +463,13 @@ waveform_render (void *user_data)
             top /= channels;
         }
 
+        float x_off;
+        if (CONFIG_RENDER_METHOD == BARS) {
+            x_off = 0.0;
+        }
+        else {
+            x_off = 0.5;
+        }
         if (CONFIG_MIX_TO_MONO) {
             frames_size = VALUES_PER_FRAME;
             channels = 1;
@@ -548,27 +560,33 @@ waveform_render (void *user_data)
 
                 /* Draw Foreground - line */
                 if (TRUE) {
-                    DRECT pts0 = { left + x - 0.5, top + yoff - prms, left + x + 0.5, top + yoff - rms };
+                    DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
                     draw_cairo_line (temp_cr, &pts0, &render.c_rms);
 
                     if (!render.rectified) {
-                        DRECT pts1 = { left + x - 0.5, top + yoff + prms, left + x + 0.5, top + yoff + rms };
+                        DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
                         draw_cairo_line (temp_cr, &pts1, &render.c_rms);
                     }
                 }
 
                 if (TRUE) {
-                    DRECT pts0 = { left + x - 0.5, top + yoff - pmin, left + x + 0.5, top + yoff - min };
+                    DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
                     draw_cairo_line (temp_cr, &pts0, &render.c_fg);
                     if (!render.rectified) {
-                        DRECT pts1 = { left + x - 0.5, top + yoff - pmax, left + x + 0.5, top + yoff - max };
+                        DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
                         draw_cairo_line (temp_cr, &pts1, &render.c_fg);
                     }
                 }
-                pmin = min;
-                pmax = max;
-                prms = rms;
-
+                if (CONFIG_RENDER_METHOD == BARS) {
+                    pmin = 0;
+                    pmax = 0;
+                    prms = 0;
+                }
+                else {
+                    pmin = min;
+                    pmax = max;
+                    prms = rms;
+                }
                 x++;
                 if (x > width) {
                     break;
@@ -578,15 +596,15 @@ waveform_render (void *user_data)
                 frames_per_buf = frames_per_buf > (max_frames_per_x * frames_size) ? (max_frames_per_x * frames_size) : frames_per_buf;
                 frames_per_buf = frames_per_buf + ((frames_size) -(frames_per_buf % (frames_size)));
             }
+            // center line
+            if (!render.rectified) {
+                DRECT pts = { left, top + (0.5 * height) - 0.5, left + width, top + (0.5 * height) + 0.5 };
+                cairo_set_line_width (temp_cr, BORDER_LINE_WIDTH);
+                draw_cairo_line (temp_cr, &pts, &render.c_cl);
+            }
+            cairo_set_line_width (temp_cr, 1.0);
         }
         deadbeef->mutex_unlock (w->mutex);
-
-        // center line
-        if (!render.rectified) {
-            DRECT pts = { left, top + (0.5 * height) - 0.5, left + width, top + (0.5 * height) + 0.5 };
-            cairo_set_line_width (temp_cr, BORDER_LINE_WIDTH);
-            draw_cairo_line (temp_cr, &pts, &render.c_cl);
-        }
         cairo_destroy (temp_cr);
     }
     if (dec && fileinfo) {
@@ -886,6 +904,11 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     GtkWidget *progressbar_color;
     GtkWidget *downmix_to_mono;
     GtkWidget *log_scale;
+    GtkWidget *label04;
+    GtkWidget *frame02;
+    GtkWidget *vbox14;
+    GtkWidget *render_method_bars;
+    GtkWidget *render_method_spikes;
     GtkWidget *dialog_action_area13;
     GtkWidget *applybutton1;
     GtkWidget *cancelbutton1;
@@ -958,11 +981,33 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_widget_show (progressbar_color);
     gtk_box_pack_start (GTK_BOX (vbox13), progressbar_color, FALSE, FALSE, 0);
 
-    downmix_to_mono = gtk_check_button_new_with_mnemonic ("Downmix to mono");
+    label04 = gtk_label_new (NULL);
+    gtk_label_set_markup (GTK_LABEL(label04),"<b>Render Method</b>");
+    gtk_widget_show (label04);
+
+    frame02 = gtk_frame_new ("Render method");
+    gtk_frame_set_label_widget ((GtkFrame *)frame02, label04);
+    gtk_frame_set_shadow_type ((GtkFrame *)frame02, GTK_SHADOW_IN);
+    gtk_widget_show (frame02);
+    gtk_box_pack_start (GTK_BOX (vbox01), frame02, FALSE, FALSE, 0);
+
+    vbox14 = gtk_vbox_new (FALSE, 8);
+    gtk_widget_show (vbox14);
+    gtk_container_add (GTK_CONTAINER (frame02), vbox14);
+
+    render_method_bars = gtk_radio_button_new_with_label (NULL, "Bars");
+    gtk_widget_show (render_method_bars);
+    gtk_box_pack_start (GTK_BOX (vbox14), render_method_bars, TRUE, TRUE, 0);
+
+    render_method_spikes = gtk_radio_button_new_with_label_from_widget ((GtkRadioButton *)render_method_bars, "Spikes");
+    gtk_widget_show (render_method_spikes);
+    gtk_box_pack_start (GTK_BOX (vbox14), render_method_spikes, TRUE, TRUE, 0);
+
+    downmix_to_mono = gtk_check_button_new_with_label ("Downmix to mono");
     gtk_widget_show (downmix_to_mono);
     gtk_box_pack_start (GTK_BOX (vbox01), downmix_to_mono, FALSE, FALSE, 0);
 
-    log_scale = gtk_check_button_new_with_mnemonic ("Logarithmic scale");
+    log_scale = gtk_check_button_new_with_label ("Logarithmic scale");
     gtk_widget_show (log_scale);
     gtk_box_pack_start (GTK_BOX (vbox01), log_scale, FALSE, FALSE, 0);
 
@@ -993,6 +1038,13 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (downmix_to_mono), CONFIG_MIX_TO_MONO);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (log_scale), CONFIG_LOG_ENABLED);
 
+    if (CONFIG_RENDER_METHOD == BARS) {
+        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_bars), TRUE);
+    }
+    else {
+        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_spikes), TRUE);
+    }
+
     for (;;) {
         int response = gtk_dialog_run (GTK_DIALOG (waveform_properties));
         if (response == GTK_RESPONSE_OK || response == GTK_RESPONSE_APPLY) {
@@ -1001,6 +1053,12 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
             gtk_color_button_get_color (GTK_COLOR_BUTTON (progressbar_color), &CONFIG_PB_COLOR);
             CONFIG_MIX_TO_MONO = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (downmix_to_mono));
             CONFIG_LOG_ENABLED = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (log_scale));
+            if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_bars)) == TRUE) {
+                CONFIG_RENDER_METHOD = BARS;
+            }
+            else if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_spikes)) == TRUE) {
+                CONFIG_RENDER_METHOD = SPIKES;
+            }
             save_config ();
             deadbeef->sendmessage (DB_EV_CONFIGCHANGED, 0, 0, 0);
         }
@@ -1050,7 +1108,7 @@ w_waveform_create (void)
     gtk_widget_show (w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->drawarea);
     gtk_widget_show (w->popup);
-    gtk_container_add (GTK_CONTAINER (w->base.widget), w->popup);
+    gtk_container_add (GTK_CONTAINER (w->drawarea), w->popup);
     gtk_widget_show (w->popup_item);
     gtk_container_add (GTK_CONTAINER (w->popup), w->popup_item);
 
