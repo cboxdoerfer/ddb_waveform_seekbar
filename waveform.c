@@ -215,16 +215,6 @@ waveform_redraw_cb (void *user_data) {
 static gboolean
 waveform_redraw_thread (void *user_data) {
     w_waveform_t *w = user_data;
-    GtkAllocation a;
-    gtk_widget_get_allocation (w->drawarea, &a);
-    //cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
-    if (!w->surf || cairo_image_surface_get_width (w->surf) != a.width || cairo_image_surface_get_height (w->surf) != a.height) {
-        if (w->surf) {
-            cairo_surface_destroy (w->surf);
-            w->surf = NULL;
-        }
-        w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
-    }
     w->resizetimer = 0;
     intptr_t tid = deadbeef->thread_start (waveform_render, w);
     deadbeef->thread_detach (tid);
@@ -303,7 +293,7 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
     w_waveform_t *w = user_data;
     GtkAllocation a;
     gtk_widget_get_allocation (widget, &a);
-    
+
     double width = a.width;
     double height = a.height * 0.9;
     double left = 0;
@@ -447,7 +437,7 @@ waveform_render (void *user_data)
         cairo_set_source_rgba (temp_cr,(float)CONFIG_BG_COLOR_R/255,(float)CONFIG_BG_COLOR_G/255,(float)CONFIG_BG_COLOR_B/255,1);
         cairo_fill (temp_cr);
         cairo_set_line_width (temp_cr, 1.0);
-        
+
         if (channel < 0 || channel >= fileinfo->fmt.channels) {
             printf ("invalid channel\n");
             return FALSE;
@@ -464,7 +454,7 @@ waveform_render (void *user_data)
         }
         int max_frames_per_x = 1 + ceilf (frames_per_x);
         int frames_per_buf = floorf (frames_per_x * (float)(frames_size));
-        
+
         int ch;
         int offset;
         int f_offset;
@@ -628,7 +618,6 @@ waveform_generate_wavedata (gpointer user_data)
     int nframes_per_channel;
     long frames_per_buf, buffer_len;
 
-
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
     int counter = 0;
@@ -691,6 +680,7 @@ waveform_generate_wavedata (gpointer user_data)
                 }
                 memset (buffer, 0, sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
                 deadbeef->mutex_unlock (w->mutex);
+
                 channels = (channel > 0) ? 1 : fileinfo->fmt.channels;
                 frames_per_buf = floorf (frames_per_x);
                 buffer_len = frames_per_buf * fileinfo->fmt.channels;
@@ -723,7 +713,6 @@ waveform_generate_wavedata (gpointer user_data)
                     if (sz != buffer_len) {
                         eof = 1;
                     }
-
                     deadbeef->pcm_convert (&fileinfo->fmt, (char *)buffer, &out_fmt, (char *)data, buffer_len);
 
                     int frame;
@@ -752,14 +741,13 @@ waveform_generate_wavedata (gpointer user_data)
                         // write(fd,(const char *)&max,sizeof(float));
                         // write(fd,(const char *)&min,sizeof(float));
                         // write(fd,(const char *)&rms,sizeof(float));
-                        
                         deadbeef->mutex_lock (w->mutex);
                         w->buffer[counter] = max;
                         w->buffer[counter+1] = min;
                         w->buffer[counter+2] = rms;
                         deadbeef->mutex_unlock (w->mutex);
                         counter += 3;
-                    } 
+                    }
                 }
                 w->buffer_len = counter;
             }
@@ -771,7 +759,7 @@ waveform_generate_wavedata (gpointer user_data)
         if (dec && fileinfo) {
             dec->free (fileinfo);
             fileinfo = NULL;
-        }  
+        }
     }
     return TRUE;
 }
@@ -788,7 +776,7 @@ waveform_get_wavedata (gpointer user_data)
 }
 
 gboolean
-waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) 
+waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (widget));
     w_waveform_t *w = user_data;
@@ -809,7 +797,7 @@ waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data
 }
 
 gboolean
-waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data) 
+waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
     w_waveform_t *w = user_data;
     if (w->seekbar_moving) {
@@ -822,7 +810,7 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
 }
 
 gboolean
-waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data) 
+waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
     w_waveform_t *w = user_data;
     w->seekbar_moving = 1;
@@ -834,7 +822,7 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
 }
 
 gboolean
-waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data) 
+waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
     w_waveform_t *w = user_data;
     w->seekbar_moving = 0;
@@ -979,8 +967,8 @@ waveform_disconnect (void)
 }
 
 static const char settings_dlg[] =
-    "property \"Logarithmic scale \"                     checkbox "      CONFSTR_WF_LOG_ENABLED        " 1 ;\n"
-    "property \"Downmix to mono \"                     checkbox "      CONFSTR_WF_MIX_TO_MONO        " 1 ;\n"
+    "property \"Logarithmic scale \"                     checkbox "      CONFSTR_WF_LOG_ENABLED        " 0 ;\n"
+    "property \"Downmix to mono \"                     checkbox "      CONFSTR_WF_MIX_TO_MONO        " 0 ;\n"
     "property \"Background color (r): \"          spinbtn[0,255,1] "      CONFSTR_WF_BG_COLOR_R        " 60 ;\n"
     "property \"Background color (g): \"          spinbtn[0,255,1] "      CONFSTR_WF_BG_COLOR_G        " 60 ;\n"
     "property \"Background color (b): \"          spinbtn[0,255,1] "      CONFSTR_WF_BG_COLOR_B        " 60 ;\n"
