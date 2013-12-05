@@ -194,7 +194,7 @@ w_waveform_destroy (ddb_gtkui_widget_t *widget) {
 }
 
 gboolean
-waveform_render (GtkWidget *widget, cairo_t *cr, gpointer user_data);
+waveform_render (gpointer user_data);
 
 gboolean
 w_waveform_draw_cb (void *data) {
@@ -207,7 +207,27 @@ static gboolean
 waveform_redraw_cb (void *user_data) {
     w_waveform_t *w = user_data;
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
-    waveform_render (w->drawarea, cr, user_data);
+    waveform_render (w);
+    gtk_widget_queue_draw (w->drawarea);
+    return FALSE;
+}
+
+static gboolean
+waveform_redraw_thread (void *user_data) {
+    w_waveform_t *w = user_data;
+    GtkAllocation a;
+    gtk_widget_get_allocation (w->drawarea, &a);
+    //cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
+    if (!w->surf || cairo_image_surface_get_width (w->surf) != a.width || cairo_image_surface_get_height (w->surf) != a.height) {
+        if (w->surf) {
+            cairo_surface_destroy (w->surf);
+            w->surf = NULL;
+        }
+        w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
+    }
+    w->resizetimer = 0;
+    intptr_t tid = deadbeef->thread_start (waveform_render, w);
+    deadbeef->thread_detach (tid);
     gtk_widget_queue_draw (w->drawarea);
     return FALSE;
 }
@@ -321,10 +341,6 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
             pos = w->seekbar_move_x;
         }
     }
-    cairo_set_source_rgb (cr,1,1,1);
-    cairo_rectangle (cr, 0, 0, a.width, a.height);
-    cairo_fill (cr);
-    
     cairo_save (cr);
     cairo_translate(cr, 0, 0);
     cairo_scale (cr, a.width/w->width, a.height/w->height);
@@ -343,11 +359,11 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
 }
 
 gboolean
-waveform_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
+waveform_render (void *user_data)
 {
     w_waveform_t *w = user_data;
     GtkAllocation a;
-    gtk_widget_get_allocation (widget, &a);
+    gtk_widget_get_allocation (w->drawarea, &a);
 
     double width = a.width;
     double height = a.height * 0.9;
@@ -472,7 +488,8 @@ waveform_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
             height = a.height * 0.9;
             top = (a.height - height)/2;
         }
-        
+
+        deadbeef->mutex_lock (w->mutex);
         for (ch = 0; ch < channels; ch++, top += (a.height / channels)) {
             x = 0;
             f_offset = 0;
@@ -583,6 +600,8 @@ waveform_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
                 frames_per_buf = frames_per_buf + ((frames_size) -(frames_per_buf % (frames_size)));
             }
         }
+        deadbeef->mutex_unlock (w->mutex);
+
         // center line
         if (!render.rectified) {
             DRECT pts = { left, top + (0.5 * height) - 0.5, left + width, top + (0.5 * height) + 0.5 };
@@ -595,7 +614,7 @@ waveform_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
         dec->free (fileinfo);
         fileinfo = NULL;
     }
-    return TRUE;
+    return FALSE;
 }
 
 gboolean
@@ -651,22 +670,27 @@ waveform_generate_wavedata (gpointer user_data)
                     return FALSE;
                 }
 
+                deadbeef->mutex_lock (w->mutex);
                 data = malloc (sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
                 if (!data) {
                     printf ("out of memory.\n");
                     deadbeef->pl_item_unref (it);
+                    deadbeef->mutex_unlock (w->mutex);
                     return FALSE;
                 }
                 memset (data, 0, sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
+                deadbeef->mutex_unlock (w->mutex);
 
+                deadbeef->mutex_lock (w->mutex);
                 buffer = malloc (sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
                 if (!buffer) {
                     printf ("out of memory.\n");
                     deadbeef->pl_item_unref (it);
+                    deadbeef->mutex_unlock (w->mutex);
                     return FALSE;
                 }
                 memset (buffer, 0, sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
-
+                deadbeef->mutex_unlock (w->mutex);
                 channels = (channel > 0) ? 1 : fileinfo->fmt.channels;
                 frames_per_buf = floorf (frames_per_x);
                 buffer_len = frames_per_buf * fileinfo->fmt.channels;
@@ -728,9 +752,12 @@ waveform_generate_wavedata (gpointer user_data)
                         // write(fd,(const char *)&max,sizeof(float));
                         // write(fd,(const char *)&min,sizeof(float));
                         // write(fd,(const char *)&rms,sizeof(float));
+                        
+                        deadbeef->mutex_lock (w->mutex);
                         w->buffer[counter] = max;
                         w->buffer[counter+1] = min;
                         w->buffer[counter+2] = rms;
+                        deadbeef->mutex_unlock (w->mutex);
                         counter += 3;
                     } 
                 }
@@ -756,7 +783,7 @@ waveform_get_wavedata (gpointer user_data)
     w_waveform_t *w = user_data;
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
     waveform_generate_wavedata (user_data);
-    waveform_render (w->drawarea, cr, user_data);
+    waveform_render (w);
     deadbeef->background_job_decrement ();
 }
 
@@ -774,7 +801,10 @@ gboolean
 waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 {
     w_waveform_t *w = user_data;
-    w->resizetimer = g_timeout_add (300, waveform_redraw_cb, user_data);
+    if (w->resizetimer) {
+        g_source_remove (w->resizetimer);
+    }
+    w->resizetimer = g_timeout_add (500, waveform_redraw_thread, user_data);
     return FALSE;
 }
 
