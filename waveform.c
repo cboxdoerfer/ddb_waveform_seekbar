@@ -982,7 +982,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_widget_show (downmix_to_mono);
     gtk_box_pack_start (GTK_BOX (vbox01), downmix_to_mono, FALSE, FALSE, 0);
 
-    log_scale = gtk_check_button_new_with_mnemonic ("Logarithmic");
+    log_scale = gtk_check_button_new_with_mnemonic ("Logarithmic scale");
     gtk_widget_show (log_scale);
     gtk_box_pack_start (GTK_BOX (vbox01), log_scale, FALSE, FALSE, 0);
 
