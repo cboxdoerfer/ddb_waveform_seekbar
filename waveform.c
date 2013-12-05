@@ -154,17 +154,6 @@ load_config (void)
 static int
 on_config_changed (uintptr_t ctx)
 {
-    gboolean log_enabled = CONFIG_LOG_ENABLED;
-    gboolean mix_to_mono = CONFIG_MIX_TO_MONO;
-    gint background_color_r = CONFIG_BG_COLOR.red;
-    gint background_color_g = CONFIG_BG_COLOR.green;
-    gint background_color_b = CONFIG_BG_COLOR.blue;
-    gint foreground_color_r = CONFIG_FG_COLOR.red;
-    gint foreground_color_g = CONFIG_FG_COLOR.green;
-    gint foreground_color_b = CONFIG_FG_COLOR.blue;
-    gint progressbar_color_r = CONFIG_PB_COLOR.red;
-    gint progressbar_color_g = CONFIG_PB_COLOR.green;
-    gint progressbar_color_b = CONFIG_PB_COLOR.blue;
     load_config ();
     return 0;
 }
@@ -191,8 +180,8 @@ w_waveform_destroy (ddb_gtkui_widget_t *widget)
     }
 }
 
-gboolean
-waveform_render (gpointer user_data);
+void
+waveform_render (void *user_data);
 
 gboolean
 w_waveform_draw_cb (void *data)
@@ -206,7 +195,6 @@ static gboolean
 waveform_redraw_cb (void *user_data)
 {
     w_waveform_t *w = user_data;
-    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
     waveform_render (w);
     gtk_widget_queue_draw (w->drawarea);
     return FALSE;
@@ -299,9 +287,6 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
     gtk_widget_get_allocation (widget, &a);
 
     double width = a.width;
-    double height = a.height * 0.9;
-    double left = 0;
-    double top = (a.height - height)/2;
     float pos = 0.0;
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
@@ -352,7 +337,7 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
     return TRUE;
 }
 
-gboolean
+void
 waveform_render (void *user_data)
 {
     w_waveform_t *w = user_data;
@@ -444,7 +429,7 @@ waveform_render (void *user_data)
 
         if (channel < 0 || channel >= fileinfo->fmt.channels) {
             printf ("invalid channel\n");
-            return FALSE;
+            return;
         }
 
         float frames_per_x;
@@ -608,7 +593,7 @@ waveform_render (void *user_data)
         dec->free (fileinfo);
         fileinfo = NULL;
     }
-    return FALSE;
+    return;
 }
 
 gboolean
@@ -618,13 +603,11 @@ waveform_generate_wavedata (gpointer user_data)
     int channel = w->channel;
     double width = 4096;
     int channels;
-    int nframes;
-    int nframes_per_channel;
+
     long frames_per_buf, buffer_len;
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
-    int counter = 0;
     if (it) {
         deadbeef->pl_lock ();
         const char *dec_meta = deadbeef->pl_find_meta_raw (it, ":DECODER");
@@ -651,11 +634,10 @@ waveform_generate_wavedata (gpointer user_data)
             float* data;
             float* buffer;
             if (fileinfo) {
-                nframes_per_channel = (int)deadbeef->pl_get_item_duration(it) * fileinfo->fmt.samplerate;
-                nframes = nframes_per_channel * fileinfo->fmt.channels;
+                int nframes_per_channel = (int)deadbeef->pl_get_item_duration(it) * fileinfo->fmt.samplerate;
+                //int nframes = nframes_per_channel * fileinfo->fmt.channels;
                 const float frames_per_x = (float) nframes_per_channel / (float) width;
                 const long max_frames_per_x = 1 + ceilf (frames_per_x);
-                long f_offset = 0;
 
                 if (channel < 0 || channel >= fileinfo->fmt.channels) {
                     printf ("invalid channel\n");
@@ -702,7 +684,7 @@ waveform_generate_wavedata (gpointer user_data)
                 int counter = 0;
                 while (TRUE) {
                     if (eof) {
-                        printf ("end of file.\n");
+                        //printf ("end of file.\n");
                         break;
                     }
 
@@ -721,7 +703,6 @@ waveform_generate_wavedata (gpointer user_data)
 
                     int frame;
                     float min, max, rms;
-                    double yoff;
                     int ch;
                     for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
                         if (counter >= w->max_buffer_len) {
@@ -754,9 +735,9 @@ waveform_generate_wavedata (gpointer user_data)
                     }
                 }
                 w->buffer_len = counter;
+                free (data);
+                free (buffer);
             }
-            free (data);
-            free (buffer);
         }
 
         deadbeef->pl_item_unref (it);
@@ -773,7 +754,6 @@ waveform_get_wavedata (gpointer user_data)
 {
     deadbeef->background_job_increment ();
     w_waveform_t *w = user_data;
-    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
     waveform_generate_wavedata (user_data);
     waveform_render (w);
     deadbeef->background_job_decrement ();
@@ -784,7 +764,7 @@ waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
 {
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (widget));
     w_waveform_t *w = user_data;
-    gboolean res = waveform_seekbar_render (widget, cr, user_data);
+    gboolean res = waveform_seekbar_render (widget, cr, w);
     cairo_destroy (cr);
     return res;
 }
@@ -856,9 +836,9 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
 }
 
 static int
-waveform_message (ddb_gtkui_widget_t *w, uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2)
+waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2)
 {
-    w_waveform_t *ca = (w_waveform_t *)w;
+    w_waveform_t *w = (w_waveform_t *)widget;
     intptr_t tid;
     switch (id) {
     case DB_EV_SONGSTARTED:
