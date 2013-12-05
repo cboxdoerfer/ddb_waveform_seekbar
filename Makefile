@@ -24,8 +24,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-OUT_GTK2?=ddb_infobar_gtk2.so
-GTK2_CFLAGS?=`pkg-config --cflags gtk+-2.0`
+OUT_GTK2?=ddb_misc_waveform.so
+GTK2_CFLAGS?=`pkg-config --cflags --libs gtk+-2.0`
 
 CC?=gcc
 CFLAGS+=-std=c99 -fPIC -Wall
@@ -36,4 +36,4 @@ SOURCES?=waveform.c
 all: $(OUT_GTK2)
 
 $(OUT_GTK2):
-	$(CC) $(CFLAGS) $(LDFLAGS) $(GTK2_CFLAGS) -o $(OUT_GTK2) $(SOURCES)
+	$(CC) -I/usr/local/include $(CFLAGS) $(LDFLAGS) $(GTK2_CFLAGS) -o $(OUT_GTK2) $(SOURCES)
