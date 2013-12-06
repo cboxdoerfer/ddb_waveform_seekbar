@@ -633,6 +633,11 @@ waveform_render (void *user_data)
             top = (a.height - height)/2;
         }
 
+        if (CONFIG_RENDER_METHOD == BARS) {
+            cairo_set_line_width (temp_cr, 1);
+            cairo_set_antialias (temp_cr, CAIRO_ANTIALIAS_NONE);
+        }
+
         int offset;
         int f_offset;
         float min, max, rms;
@@ -749,7 +754,7 @@ waveform_render (void *user_data)
             }
             // center line
             if (!render.rectified) {
-                DRECT pts = { left, top + (0.5 * height) - 0.5, left + width, top + (0.5 * height) + 0.5 };
+                DRECT pts = { left, top + (0.5 * height) - x_off, left + width, top + (0.5 * height) + x_off };
                 draw_cairo_line (temp_cr, &pts, &render.c_cl);
             }
         }
