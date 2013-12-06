@@ -74,6 +74,7 @@ typedef struct
     float *buffer;
     size_t max_buffer_len;
     size_t buffer_len;
+    int rendering;
     int nsamples;
     int channel;
     int seekbar_moving;
@@ -480,6 +481,10 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
     double width = a.width;
     float pos = 0.0;
 
+    if (w->rendering == 1) {
+        return FALSE;
+    }
+
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (!trk || deadbeef->pl_get_item_duration (trk) < 0) {
         if (trk) {
@@ -572,13 +577,16 @@ waveform_render (void *user_data)
     DB_decoder_t *dec = NULL;
     DB_fileinfo_t *fileinfo = NULL;
 
-    if (!w->surf || cairo_image_surface_get_width (w->surf) != a.width || cairo_image_surface_get_height (w->surf) != a.height) {
-            if (w->surf) {
-                cairo_surface_destroy (w->surf);
-                w->surf = NULL;
-            }
-            w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
+    w->rendering = 1;
+    if (cairo_image_surface_get_width (w->surf) != a.width || cairo_image_surface_get_height (w->surf) != a.height) {
+        if (w->surf) {
+            cairo_surface_destroy (w->surf);
+            w->surf = NULL;
         }
+        w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
+    }
+    w->rendering = 0;
+
     cairo_surface_flush (w->surf);
     cairo_t *temp_cr = cairo_create (w->surf);
 
@@ -1071,10 +1079,13 @@ void
 w_waveform_init (ddb_gtkui_widget_t *w)
 {
     w_waveform_t *wf = (w_waveform_t *)w;
+    GtkAllocation a;
+    gtk_widget_get_allocation (wf->drawarea, &a);
     wf->max_buffer_len = VALUES_PER_FRAME * sizeof(float) * MAX_VALUES_PER_CHANNEL * 4;
     deadbeef->mutex_lock (wf->mutex);
     wf->buffer = malloc (sizeof (float) * wf->max_buffer_len);
     memset (wf->buffer, 0, sizeof (float) * wf->max_buffer_len);
+    wf->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
     deadbeef->mutex_unlock (wf->mutex);
     if (wf->drawtimer) {
         g_source_remove (wf->drawtimer);
