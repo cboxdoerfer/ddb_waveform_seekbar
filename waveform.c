@@ -305,10 +305,10 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_box_pack_start (GTK_BOX (vbox13), progressbar_color, TRUE, FALSE, 0);
 
     label04 = gtk_label_new (NULL);
-    gtk_label_set_markup (GTK_LABEL(label04),"<b>Render Method</b>");
+    gtk_label_set_markup (GTK_LABEL(label04),"<b>Style</b>");
     gtk_widget_show (label04);
 
-    frame02 = gtk_frame_new ("Render method");
+    frame02 = gtk_frame_new ("Style");
     gtk_frame_set_label_widget ((GtkFrame *)frame02, label04);
     gtk_frame_set_shadow_type ((GtkFrame *)frame02, GTK_SHADOW_IN);
     gtk_widget_show (frame02);
@@ -571,12 +571,19 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
             pos = w->seekbar_move_x;
         }
     }
-    cairo_save (cr);
-    cairo_translate(cr, 0, 0);
-    cairo_scale (cr, width/w->width, a.height/w->height);
-    cairo_set_source_surface (cr, w->surf, 0, 0);
-    cairo_paint (cr);
-    cairo_restore (cr);
+
+    if (a.height != w->height || a.width != w->width) {
+        cairo_save (cr);
+        cairo_translate(cr, 0, 0);
+        cairo_scale (cr, width/w->width, a.height/w->height);
+        cairo_set_source_surface (cr, w->surf, 0, 0);
+        cairo_paint (cr);
+        cairo_restore (cr);
+    }
+    else {
+        cairo_set_source_surface (cr, w->surf, 0, 0);
+        cairo_paint (cr);
+    }
 
     cairo_set_source_rgba (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f,CONFIG_PB_ALPHA/65535.f);
     cairo_rectangle (cr, 0, 0, pos, a.height);
