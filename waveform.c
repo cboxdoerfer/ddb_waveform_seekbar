@@ -76,7 +76,6 @@ typedef struct
     size_t buffer_len;
     int rendering;
     int nsamples;
-    int channel;
     int seekbar_moving;
     float seekbar_moved;
     float seekbar_move_x;
@@ -498,7 +497,6 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
             pos = deadbeef->streamer_get_playpos () / deadbeef->pl_get_item_duration (trk);
             pos *= width;
         }
-
         deadbeef->pl_item_unref (trk);
     }
 
@@ -547,10 +545,7 @@ waveform_render (void *user_data)
     float pmin = 0;
     float pmax = 0;
     float prms = 0;
-
-    int channel = 0;
     float gain = 1.0;
-    int x = 0;
 
     RENDER render =
     {   NULL, NULL, NULL,
@@ -562,7 +557,7 @@ waveform_render (void *user_data)
         /*border*/ FALSE,
         /*geometry_no_border*/ FALSE,
         /*logscale*/ CONFIG_LOG_ENABLED, /*rectified*/ FALSE,
-        /*foreground*/  { (float)CONFIG_FG_COLOR.red/65535,(float)CONFIG_FG_COLOR.green/65535,(float)CONFIG_FG_COLOR.blue/65535, 0.6 },
+        /*foreground*/  { (float)CONFIG_FG_COLOR.red/65535,(float)CONFIG_FG_COLOR.green/65535,(float)CONFIG_FG_COLOR.blue/65535, 0.5 },
         /*wave-rms*/    { (float)CONFIG_FG_COLOR.red/65535,(float)CONFIG_FG_COLOR.green/65535,(float)CONFIG_FG_COLOR.blue/65535, 1.0 },
         /*background*/  { (float)CONFIG_BG_COLOR.red/65535,(float)CONFIG_BG_COLOR.green/65535,(float)CONFIG_BG_COLOR.blue/65535, 0.5 },
         /*annotation*/  { 1.0, 1.0, 1.0, 1.0 },
@@ -595,7 +590,7 @@ waveform_render (void *user_data)
     cairo_stroke_preserve (temp_cr);
     cairo_set_source_rgba (temp_cr,(float)CONFIG_BG_COLOR.red/65535,(float)CONFIG_BG_COLOR.green/65535,(float)CONFIG_BG_COLOR.blue/65535,1);
     cairo_fill (temp_cr);
-    cairo_set_line_width (temp_cr, 1.0);
+    cairo_set_line_width (temp_cr, BORDER_LINE_WIDTH);
 
     if (it) {
         deadbeef->pl_lock ();
@@ -623,14 +618,9 @@ waveform_render (void *user_data)
         deadbeef->pl_item_unref (it);
     }
     if (fileinfo) {
-        if (channel < 0 || channel >= fileinfo->fmt.channels) {
-            printf ("invalid channel\n");
-            return;
-        }
-
-        float frames_per_x;
         int frames_size = VALUES_PER_FRAME * fileinfo->fmt.channels;
         int channels = fileinfo->fmt.channels;
+        float frames_per_x;
 
         if (channels != 0) {
             frames_per_x = w->buffer_len / (float)(width * frames_size);
@@ -643,12 +633,6 @@ waveform_render (void *user_data)
         int max_frames_per_x = 1 + ceilf (frames_per_x);
         int frames_per_buf = floorf (frames_per_x * (float)(frames_size));
 
-        int ch;
-        int offset;
-        int f_offset;
-        int temp;
-        int frame_offset;
-        float min, max, rms;
         float x_off;
         if (CONFIG_RENDER_METHOD == BARS) {
             x_off = 0.0;
@@ -656,6 +640,7 @@ waveform_render (void *user_data)
         else {
             x_off = 0.5;
         }
+
         if (CONFIG_MIX_TO_MONO) {
             frames_size = VALUES_PER_FRAME;
             channels = 1;
@@ -666,28 +651,29 @@ waveform_render (void *user_data)
             top = (a.height - height)/2;
         }
 
+        int offset;
+        int f_offset;
+        float min, max, rms;
+
         deadbeef->mutex_lock (w->mutex);
-        for (ch = 0; ch < channels; ch++, top += (a.height / channels)) {
-            cairo_set_line_width (temp_cr, 1.0);
-            x = 0;
+        for (int ch = 0; ch < channels; ch++, top += (a.height / channels)) {
             f_offset = 0;
             offset = ch * VALUES_PER_FRAME;
-            frame_offset = frames_size;
-            for (int i = 0; i < width; i++) {
-                double yoff;
-                min = 1.0; max = -1.0; rms = 0.0;
-
-                temp = offset;
+            for (int x = 0; x < width; x++) {
                 if (offset + frames_per_buf > w->buffer_len) {
                     break;
                 }
-                for (int j = offset; j < offset + frames_per_buf; j = j + frame_offset) {
+                double yoff;
+                min = 1.0; max = -1.0; rms = 0.0;
+
+                int offset_temp = offset;
+                for (int j = offset; j < offset + frames_per_buf; j = j + frames_size) {
                     max = MAX (max, w->buffer[j]);
                     min = MIN (min, w->buffer[j+1]);
                     rms = (rms + w->buffer[j+2])/2;
-                    temp += frame_offset;
+                    offset_temp += frames_size;
                 }
-                offset = temp;
+                offset = offset_temp;
 
                 if (gain != 1.0) {
                     min *= gain;
@@ -774,25 +760,16 @@ waveform_render (void *user_data)
                     pmax = max;
                     prms = rms;
                 }
-                x++;
-                if (x > width) {
-                    break;
-                }
                 f_offset += frames_per_buf;
                 frames_per_buf = floorf ((x + 1) * frames_per_x * frames_size) - f_offset;
                 frames_per_buf = frames_per_buf > (max_frames_per_x * frames_size) ? (max_frames_per_x * frames_size) : frames_per_buf;
                 frames_per_buf = frames_per_buf + ((frames_size) -(frames_per_buf % (frames_size)));
             }
-            cairo_close_path (temp_cr);
-            cairo_set_source_rgb (temp_cr, 0, 0, 1);
-            cairo_fill_preserve (temp_cr);
             // center line
             if (!render.rectified) {
                 DRECT pts = { left, top + (0.5 * height) - 0.5, left + width, top + (0.5 * height) + 0.5 };
-                cairo_set_line_width (temp_cr, BORDER_LINE_WIDTH);
                 draw_cairo_line (temp_cr, &pts, &render.c_cl);
             }
-
         }
         deadbeef->mutex_unlock (w->mutex);
     }
@@ -808,10 +785,7 @@ gboolean
 waveform_generate_wavedata (gpointer user_data)
 {
     w_waveform_t *w = user_data;
-    int channel = w->channel;
-    double width = 4096;
-    int channels;
-
+    double width = MAX_VALUES_PER_CHANNEL;
     long frames_per_buf, buffer_len;
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
@@ -843,15 +817,8 @@ waveform_generate_wavedata (gpointer user_data)
             float* buffer;
             if (fileinfo) {
                 int nframes_per_channel = (int)deadbeef->pl_get_item_duration(it) * fileinfo->fmt.samplerate;
-                //int nframes = nframes_per_channel * fileinfo->fmt.channels;
                 const float frames_per_x = (float) nframes_per_channel / (float) width;
                 const long max_frames_per_x = 1 + ceilf (frames_per_x);
-
-                if (channel < 0 || channel >= fileinfo->fmt.channels) {
-                    printf ("invalid channel\n");
-                    deadbeef->pl_item_unref (it);
-                    return FALSE;
-                }
 
                 deadbeef->mutex_lock (w->mutex);
                 data = malloc (sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
@@ -875,7 +842,7 @@ waveform_generate_wavedata (gpointer user_data)
                 memset (buffer, 0, sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
                 deadbeef->mutex_unlock (w->mutex);
 
-                channels = (channel > 0) ? 1 : fileinfo->fmt.channels;
+                int channels = (!CONFIG_MIX_TO_MONO) ? 1 : fileinfo->fmt.channels;
                 frames_per_buf = floorf (frames_per_x);
                 buffer_len = frames_per_buf * fileinfo->fmt.channels;
 
@@ -917,8 +884,6 @@ waveform_generate_wavedata (gpointer user_data)
                             break;
                         }
                         min = 1.0; max = -1.0; rms = 0.0;
-                        /*if (channel > 0 && ch + 1 != channel)
-                            continue;*/
                         for (frame = 0; frame < frames_per_buf - ch; frame++) {
                             if (frame * fileinfo->fmt.channels - ch > buffer_len) {
                                 fprintf (stderr, "index error!\n");
@@ -931,9 +896,6 @@ waveform_generate_wavedata (gpointer user_data)
                         }
                         rms /= frames_per_buf * channels;
                         rms = sqrt (rms);
-                        // write(fd,(const char *)&max,sizeof(float));
-                        // write(fd,(const char *)&min,sizeof(float));
-                        // write(fd,(const char *)&rms,sizeof(float));
                         deadbeef->mutex_lock (w->mutex);
                         w->buffer[counter] = max;
                         w->buffer[counter+1] = min;
