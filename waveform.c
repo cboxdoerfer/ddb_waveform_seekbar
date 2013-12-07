@@ -678,19 +678,16 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
 
             int rec_width = ex.width + 10;
             int rec_height = ex.height + 10;
-            int rec_pos = seek_pos;
+            int rec_pos = seek_pos - rec_width;
             int text_pos = rec_pos + 5;
             int overlap = (seek_pos + rec_width) - a.width;
 
-            if (seek_pos + rec_width > a.width) {
-                rec_pos = seek_pos - overlap;
+            if (seek_pos < rec_width) {
+                rec_pos = 0;
                 text_pos = rec_pos + 5;
             }
 
-            uint8_t corners = 0x0a;
-            if (overlap > 3) {
-                corners = 0xff;
-            }
+            uint8_t corners = 0xff;
 
             clearlooks_rounded_rectangle (cr, rec_pos, (a.height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
             cairo_fill (cr);
