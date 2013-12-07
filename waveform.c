@@ -200,7 +200,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     GtkWidget *vbox01;
     GtkWidget *label00;
     GtkWidget *frame01;
-    GtkWidget *hbox01;
+    GtkWidget *table01;
     GtkWidget *vbox11;
     GtkWidget *label01;
     GtkWidget *background_color;
@@ -247,64 +247,49 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_frame_set_label_widget ((GtkFrame *)frame01, label00);
     gtk_frame_set_shadow_type ((GtkFrame *)frame01, GTK_SHADOW_IN);
     gtk_widget_show (frame01);
-    gtk_box_pack_start (GTK_BOX (vbox01), frame01, FALSE, FALSE, 0);
+    gtk_box_pack_start (GTK_BOX (vbox01), frame01, TRUE, FALSE, 0);
 
-    hbox01 = gtk_hbox_new (TRUE, 12);
-    gtk_widget_show (hbox01);
-    gtk_container_add (GTK_CONTAINER (frame01), hbox01);
-    gtk_container_set_border_width (GTK_CONTAINER (hbox01), 6);
-
-    vbox11 = gtk_vbox_new (FALSE, 12);
-    gtk_widget_show (vbox11);
-    gtk_box_pack_start (GTK_BOX (hbox01), vbox11, TRUE, FALSE, 0);
+    table01 = gtk_table_new (2, 4, TRUE);
+    gtk_widget_show (table01);
+    gtk_container_add (GTK_CONTAINER (frame01), table01);
+    gtk_table_set_col_spacings ((GtkTable *) table01, 8);
+    gtk_container_set_border_width (GTK_CONTAINER (table01), 6);
 
     label01 = gtk_label_new ("Background");
     gtk_widget_show (label01);
-    gtk_box_pack_start (GTK_BOX (vbox11), label01, FALSE, FALSE, 0);
+    gtk_table_attach_defaults ((GtkTable *) table01, label01, 0,1,0,1);
+
+    label02 = gtk_label_new ("Waveform");
+    gtk_widget_show (label02);
+    gtk_table_attach_defaults ((GtkTable *) table01, label02, 1,2,0,1);
+
+    label05 = gtk_label_new ("RMS");
+    gtk_widget_show (label05);
+    gtk_table_attach_defaults ((GtkTable *) table01, label05, 2,3,0,1);
+
+    label03 = gtk_label_new ("Progressbar");
+    gtk_widget_show (label03);
+    gtk_table_attach_defaults ((GtkTable *) table01, label03, 3,4,0,1);
 
     background_color = gtk_color_button_new ();
     gtk_color_button_set_use_alpha ((GtkColorButton *)background_color, TRUE);
     gtk_widget_show (background_color);
-    gtk_box_pack_start (GTK_BOX (vbox11), background_color, TRUE, FALSE, 0);
-
-    vbox12 = gtk_vbox_new (FALSE, 12);
-    gtk_widget_show (vbox12);
-    gtk_box_pack_start (GTK_BOX (hbox01), vbox12, TRUE, TRUE, 0);
-
-    label02 = gtk_label_new ("Waveform");
-    gtk_widget_show (label02);
-    gtk_box_pack_start (GTK_BOX (vbox12), label02, FALSE, FALSE, 0);
+    gtk_table_attach_defaults ((GtkTable *) table01, background_color, 0,1,1,2);
 
     foreground_color = gtk_color_button_new ();
     gtk_color_button_set_use_alpha ((GtkColorButton *)foreground_color, TRUE);
     gtk_widget_show (foreground_color);
-    gtk_box_pack_start (GTK_BOX (vbox12), foreground_color, TRUE, TRUE, 0);
-
-    vbox15 = gtk_vbox_new (FALSE, 12);
-    gtk_widget_show (vbox15);
-    gtk_box_pack_start (GTK_BOX (hbox01), vbox15, TRUE, TRUE, 0);
-
-    label05 = gtk_label_new ("RMS");
-    gtk_widget_show (label05);
-    gtk_box_pack_start (GTK_BOX (vbox15), label05, FALSE, FALSE, 0);
+    gtk_table_attach_defaults ((GtkTable *) table01, foreground_color, 1,2,1,2);
 
     foreground_rms_color = gtk_color_button_new ();
     gtk_color_button_set_use_alpha ((GtkColorButton *)foreground_rms_color, TRUE);
     gtk_widget_show (foreground_rms_color);
-    gtk_box_pack_start (GTK_BOX (vbox15), foreground_rms_color, TRUE, TRUE, 0);
-
-    vbox13 = gtk_vbox_new (FALSE, 12);
-    gtk_widget_show (vbox13);
-    gtk_box_pack_start (GTK_BOX (hbox01), vbox13, TRUE, FALSE, 0);
-
-    label03 = gtk_label_new ("Progressbar");
-    gtk_widget_show (label03);
-    gtk_box_pack_start (GTK_BOX (vbox13), label03, FALSE, FALSE, 0);
+    gtk_table_attach_defaults ((GtkTable *) table01, foreground_rms_color, 2,3,1,2);
 
     progressbar_color = gtk_color_button_new ();
     gtk_color_button_set_use_alpha ((GtkColorButton *)progressbar_color, TRUE);
     gtk_widget_show (progressbar_color);
-    gtk_box_pack_start (GTK_BOX (vbox13), progressbar_color, TRUE, FALSE, 0);
+    gtk_table_attach_defaults ((GtkTable *) table01, progressbar_color, 3,4,1,2);
 
     label04 = gtk_label_new (NULL);
     gtk_label_set_markup (GTK_LABEL(label04),"<b>Style</b>");
