@@ -38,6 +38,7 @@
 
 #define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
+#define M_PI (3.1415926535897932384626433832795029)
 #define BORDER_LINE_WIDTH   (1.0)
 #define BARS (1)
 #define SPIKES (2)
@@ -88,6 +89,7 @@ typedef struct
     int seekbar_moving;
     float seekbar_moved;
     float seekbar_move_x;
+    float seekbar_move_x_clicked;
     float height;
     float width;
     intptr_t mutex;
@@ -525,6 +527,53 @@ inv_log_meter (float power)
 }
 #endif
 
+enum
+{
+    CORNER_NONE        = 0,
+    CORNER_TOPLEFT     = 1,
+    CORNER_TOPRIGHT    = 2,
+    CORNER_BOTTOMLEFT  = 4,
+    CORNER_BOTTOMRIGHT = 8,
+    CORNER_ALL         = 15
+};
+
+static void
+clearlooks_rounded_rectangle (cairo_t * cr,
+                  double x, double y, double w, double h,
+                  double radius, uint8_t corners)
+{
+    if (radius < 0.01 || (corners == CORNER_NONE)) {
+        cairo_rectangle (cr, x, y, w, h);
+        return;
+    }
+
+    if (corners & CORNER_TOPLEFT)
+        cairo_move_to (cr, x + radius, y);
+    else
+        cairo_move_to (cr, x, y);
+
+    if (corners & CORNER_TOPRIGHT)
+        cairo_arc (cr, x + w - radius, y + radius, radius, M_PI * 1.5, M_PI * 2);
+    else
+        cairo_line_to (cr, x + w, y);
+
+    if (corners & CORNER_BOTTOMRIGHT)
+        cairo_arc (cr, x + w - radius, y + h - radius, radius, 0, M_PI * 0.5);
+    else
+        cairo_line_to (cr, x + w, y + h);
+
+    if (corners & CORNER_BOTTOMLEFT)
+        cairo_arc (cr, x + radius, y + h - radius, radius, M_PI * 0.5, M_PI);
+    else
+        cairo_line_to (cr, x, y + h);
+
+    if (corners & CORNER_TOPLEFT)
+        cairo_arc (cr, x + radius, y + radius, radius, M_PI, M_PI * 1.5);
+    else
+        cairo_line_to (cr, x, y);
+
+}
+
 static inline void
 draw_cairo_line (cairo_t* cr, DRECT *pts, const COLOUR *c)
 {
@@ -541,9 +590,10 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
     GtkAllocation a;
     gtk_widget_get_allocation (widget, &a);
 
-    int pos_marker_width = 3;
+    int cursor_width = 3;
     double width = a.width;
     float pos = 0;
+    float seek_pos = 0;
 
     if (w->rendering == 1) {
         return FALSE;
@@ -557,19 +607,7 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
         else {
             pos = 0;
         }
-        deadbeef->pl_item_unref (trk);
-    }
-
-    if (w->seekbar_moving) {
-        if (w->seekbar_move_x < 0) {
-            pos = 0;
-        }
-        else if (w->seekbar_move_x > width) {
-            pos = width;
-        }
-        else {
-            pos = w->seekbar_move_x;
-        }
+        //deadbeef->pl_item_unref (trk);
     }
 
     if (a.height != w->height || a.width != w->width) {
@@ -590,8 +628,82 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
     cairo_fill (cr);
 
     cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
-    cairo_rectangle (cr, pos - pos_marker_width, 0, pos_marker_width, a.height);
+    cairo_rectangle (cr, pos - cursor_width, 0, cursor_width, a.height);
     cairo_fill (cr);
+
+    if (w->seekbar_moving && trk) {
+        if (w->seekbar_move_x < 0) {
+            seek_pos = 0;
+        }
+        else if (w->seekbar_move_x > width) {
+            seek_pos = width;
+        }
+        else {
+            seek_pos = w->seekbar_move_x;
+        }
+
+        cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
+        cairo_rectangle (cr, seek_pos - cursor_width, 0, cursor_width, a.height);
+        cairo_fill (cr);
+        if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
+            w->seekbar_move_x_clicked = -1;
+            float time = 0;
+            float dur = deadbeef->pl_get_item_duration (trk);
+
+            if (w->seekbar_moved > 0) {
+                time = deadbeef->streamer_get_playpos ();
+            }
+            else {
+                time = w->seekbar_move_x * dur / (a.width);
+            }
+
+            if (time < 0) {
+                time = 0;
+            }
+            if (time > dur) {
+                time = dur;
+            }
+            char s[1000];
+            int hr = time/3600;
+            int mn = (time-hr*3600)/60;
+            int sc = time-hr*3600-mn*60;
+            snprintf (s, sizeof (s), "%02d:%02d:%02d", hr, mn, sc);
+
+            cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
+            cairo_save (cr);
+            cairo_set_font_size (cr, 20);
+
+            cairo_text_extents_t ex;
+            cairo_text_extents (cr, s, &ex);
+
+            int rec_width = ex.width + 10;
+            int rec_height = ex.height + 10;
+            int rec_pos = seek_pos;
+            int text_pos = rec_pos + 5;
+            int overlap = (seek_pos + rec_width) - a.width;
+
+            if (seek_pos + rec_width > a.width) {
+                rec_pos = seek_pos - overlap;
+                text_pos = rec_pos + 5;
+            }
+
+            uint8_t corners = 0x0a;
+            if (overlap > 3) {
+                corners = 0xff;
+            }
+
+            clearlooks_rounded_rectangle (cr, rec_pos, (a.height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
+            cairo_fill (cr);
+            cairo_move_to (cr, text_pos, (a.height + ex.height)/2);
+            cairo_set_source_rgba (cr, 1, 1, 1, 1);
+            cairo_show_text (cr, s);
+            cairo_restore (cr);
+        }
+    }
+
+    if (trk) {
+        deadbeef->pl_item_unref (trk);
+    }
     return TRUE;
 }
 
@@ -1041,6 +1153,7 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
     GtkAllocation a;
     gtk_widget_get_allocation (widget, &a);
     w->seekbar_move_x = event->x;
+    w->seekbar_move_x_clicked = event->x;
     return TRUE;
 }
 
@@ -1053,6 +1166,7 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
       return TRUE;
     }
     w->seekbar_moving = 0;
+    w->seekbar_move_x_clicked = 0;
     w->seekbar_moved = 1.0;
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
