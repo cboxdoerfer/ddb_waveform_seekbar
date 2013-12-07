@@ -1232,6 +1232,13 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     wf->seekbar_moved = 0;
     wf->height = a.height;
     wf->width = a.width;
+
+    DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
+    if (it) {
+        intptr_t tid = deadbeef->thread_start (waveform_get_wavedata, w);
+        deadbeef->thread_detach (tid);
+        deadbeef->pl_item_unref (it);
+    }
     if (wf->drawtimer) {
         g_source_remove (wf->drawtimer);
         wf->drawtimer = 0;
