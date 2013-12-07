@@ -201,16 +201,12 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     GtkWidget *label00;
     GtkWidget *frame01;
     GtkWidget *table01;
-    GtkWidget *vbox11;
     GtkWidget *label01;
     GtkWidget *background_color;
-    GtkWidget *vbox12;
     GtkWidget *label02;
     GtkWidget *foreground_color;
-    GtkWidget *vbox15;
     GtkWidget *label05;
     GtkWidget *foreground_rms_color;
-    GtkWidget *vbox13;
     GtkWidget *label03;
     GtkWidget *progressbar_color;
     GtkWidget *downmix_to_mono;
@@ -665,7 +661,6 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
             int rec_height = ex.height + 10;
             int rec_pos = seek_pos - rec_width;
             int text_pos = rec_pos + 5;
-            int overlap = (seek_pos + rec_width) - a.width;
 
             if (seek_pos < rec_width) {
                 rec_pos = 0;
