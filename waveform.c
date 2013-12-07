@@ -1153,7 +1153,7 @@ w_waveform_create (void)
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect_after ((gpointer) w->drawarea, "expose_event", G_CALLBACK (waveform_expose_event), w);
 #else
-    //g_signal_connect_after ((gpointer) w->drawarea, "draw", G_CALLBACK (waveform_draw), w);
+    g_signal_connect_after ((gpointer) w->drawarea, "draw", G_CALLBACK (waveform_expose_event), w);
 #endif
     g_signal_connect_after ((gpointer) w->drawarea, "configure_event", G_CALLBACK (waveform_configure_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (waveform_button_press_event), w);
@@ -1234,7 +1234,11 @@ static DB_misc_t plugin = {
     .plugin.api_vminor      = 0,
     .plugin.version_major   = 0,
     .plugin.version_minor   = 1,
+#if GTK_CHECK_VERSION(3,0,0)
+    .plugin.id              = "waveform_seekbar-gtk3",
+#else
     .plugin.id              = "waveform_seekbar",
+#endif
     .plugin.name            = "Waveform Seekbar",
     .plugin.descr           = "Waveform Seekbar",
     .plugin.copyright       =
@@ -1264,8 +1268,16 @@ static DB_misc_t plugin = {
     // .plugin.configdialog    = settings_dlg,
 };
 
+#if !GTK_CHECK_VERSION(3,0,0)
 DB_plugin_t *
-ddb_misc_waveform_load (DB_functions_t *ddb) {
+ddb_misc_waveform_GTK2_load (DB_functions_t *ddb) {
     deadbeef = ddb;
     return &plugin.plugin;
 }
+#else
+DB_plugin_t *
+ddb_misc_waveform_GTK3_load (DB_functions_t *ddb) {
+    deadbeef = ddb;
+    return &plugin.plugin;
+}
+#endif
