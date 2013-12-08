@@ -951,7 +951,7 @@ waveform_generate_wavedata (gpointer user_data)
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
     if (it) {
-        if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != 0) {
+        if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != -1) {
             deadbeef->pl_item_unref (it);
             deadbeef->mutex_lock (w->mutex);
             memset (w->buffer, 0, w->max_buffer_len);
@@ -1326,7 +1326,7 @@ waveform_disconnect (void)
 
 static const char settings_dlg[] =
     "property \"Ignore files longer than x minutes "
-                "(0 scans every file): \"          spinbtn[0,9999,1] "      CONFSTR_WF_MAX_FILE_LENGTH        " 180 ;\n"
+                "(-1 scans every file): \"          spinbtn[-1,9999,1] "      CONFSTR_WF_MAX_FILE_LENGTH        " 180 ;\n"
 ;
 
 static DB_misc_t plugin = {
