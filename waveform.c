@@ -67,6 +67,8 @@
 #define     CONFSTR_WF_FG_RMS_COLOR_B    "waveform.fg_rms_color_b"
 #define     CONFSTR_WF_FG_RMS_ALPHA      "waveform.fg_rms_alpha"
 
+#define     CONFSTR_WF_MAX_FILE_LENGTH   "waveform.max_file_length"
+
 
 /* Global variables */
 static DB_misc_t            plugin;
@@ -129,6 +131,7 @@ static guint16  CONFIG_FG_ALPHA;
 static guint16  CONFIG_PB_ALPHA;
 static guint16  CONFIG_FG_RMS_ALPHA;
 static gint     CONFIG_RENDER_METHOD = SPIKES;
+static gint     CONFIG_MAX_FILE_LENGTH = 180;
 
 static void
 save_config (void)
@@ -137,6 +140,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_MIX_TO_MONO,         CONFIG_MIX_TO_MONO);
     deadbeef->conf_set_int (CONFSTR_WF_DISPLAY_RMS,         CONFIG_DISPLAY_RMS);
     deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
+    deadbeef->conf_set_int (CONFSTR_WF_MAX_FILE_LENGTH,     CONFIG_MAX_FILE_LENGTH);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,          CONFIG_BG_COLOR.red);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_G,          CONFIG_BG_COLOR.green);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_B,          CONFIG_BG_COLOR.blue);
@@ -163,6 +167,7 @@ load_config (void)
     CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,             FALSE);
     CONFIG_DISPLAY_RMS = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RMS,              TRUE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
+    CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
 
     CONFIG_BG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,             50000);
     CONFIG_BG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,           50000);
@@ -918,7 +923,7 @@ waveform_render (void *user_data)
                 f_offset += frames_per_buf;
                 frames_per_buf = floorf ((x + 1) * frames_per_x * frames_size) - f_offset;
                 frames_per_buf = frames_per_buf > (max_frames_per_x * frames_size) ? (max_frames_per_x * frames_size) : frames_per_buf;
-                frames_per_buf = frames_per_buf + ((frames_size) -(frames_per_buf % (frames_size)));
+                frames_per_buf = frames_per_buf + ((frames_size) -(frames_per_buf % frames_size));
             }
             // center line
             if (!render.rectified) {
@@ -946,6 +951,16 @@ waveform_generate_wavedata (gpointer user_data)
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
     if (it) {
+        if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != 0) {
+            deadbeef->pl_item_unref (it);
+            deadbeef->mutex_lock (w->mutex);
+            memset (w->buffer, 0, w->max_buffer_len);
+            w->buffer_len = 0;
+            deadbeef->mutex_unlock (w->mutex);
+            printf ("waveform: file too long.\n");
+            return TRUE;
+        }
+
         deadbeef->pl_lock ();
         const char *dec_meta = deadbeef->pl_find_meta_raw (it, ":DECODER");
         char decoder_id[100];
@@ -1010,6 +1025,10 @@ waveform_generate_wavedata (gpointer user_data)
                     .is_bigendian = 0
                 };
 
+                if (buffer_len % (2*fileinfo->fmt.channels) != 0) {
+                    buffer_len -= fileinfo->fmt.channels;
+                }
+
                 int eof = 0;
                 int counter = 0;
                 while (TRUE) {
@@ -1017,11 +1036,6 @@ waveform_generate_wavedata (gpointer user_data)
                         //printf ("end of file.\n");
                         break;
                     }
-
-                    if (buffer_len % (2*fileinfo->fmt.channels) != 0) {
-                        buffer_len -= fileinfo->fmt.channels;
-                    }
-
                     //ugly hack
                     //buffer_len = buffer_len + ((fileinfo->fmt.channels * 2) -(buffer_len % (fileinfo->fmt.channels * 2)));
 
@@ -1029,7 +1043,7 @@ waveform_generate_wavedata (gpointer user_data)
                     if (sz != buffer_len) {
                         eof = 1;
                     }
-                    deadbeef->pcm_convert (&fileinfo->fmt, (char *)buffer, &out_fmt, (char *)data, buffer_len);
+                    deadbeef->pcm_convert (&fileinfo->fmt, (char *)buffer, &out_fmt, (char *)data, sz);
 
                     int frame;
                     float min, max, rms;
@@ -1310,21 +1324,11 @@ waveform_disconnect (void)
     return 0;
 }
 
-/*
 static const char settings_dlg[] =
-    "property \"Logarithmic scale \"                     checkbox "      CONFSTR_WF_LOG_ENABLED        " 0 ;\n"
-    "property \"Downmix to mono \"                     checkbox "      CONFSTR_WF_MIX_TO_MONO        " 0 ;\n"
-    "property \"Background color (r): \"          spinbtn[0,255,1] "      CONFSTR_WF_BG_COLOR_R        " 60 ;\n"
-    "property \"Background color (g): \"          spinbtn[0,255,1] "      CONFSTR_WF_BG_COLOR_G        " 60 ;\n"
-    "property \"Background color (b): \"          spinbtn[0,255,1] "      CONFSTR_WF_BG_COLOR_B        " 60 ;\n"
-    "property \"Foreground color (r): \"          spinbtn[0,255,1] "      CONFSTR_WF_FG_COLOR_R       " 120 ;\n"
-    "property \"Foreground color (g): \"          spinbtn[0,255,1] "      CONFSTR_WF_FG_COLOR_G       " 120 ;\n"
-    "property \"Foreground color (b): \"          spinbtn[0,255,1] "      CONFSTR_WF_FG_COLOR_B       " 120 ;\n"
-    "property \"Progressbar color (r): \"         spinbtn[0,255,1] "      CONFSTR_WF_PB_COLOR_R      " 255 ;\n"
-    "property \"Progressbar color (g): \"         spinbtn[0,255,1] "      CONFSTR_WF_PB_COLOR_G        " 0 ;\n"
-    "property \"Progressbar color (b): \"         spinbtn[0,255,1] "      CONFSTR_WF_PB_COLOR_B        " 0 ;\n"
+    "property \"Ignore files longer than x minutes "
+                "(0 scans every file): \"          spinbtn[0,9999,1] "      CONFSTR_WF_MAX_FILE_LENGTH        " 180 ;\n"
 ;
-*/
+
 static DB_misc_t plugin = {
     //DB_PLUGIN_SET_API_VERSION
     .plugin.type            = DB_PLUGIN_MISC,
@@ -1363,7 +1367,7 @@ static DB_misc_t plugin = {
     .plugin.stop            = waveform_stop,
     .plugin.connect         = waveform_connect,
     .plugin.disconnect      = waveform_disconnect,
-    // .plugin.configdialog    = settings_dlg,
+    .plugin.configdialog    = settings_dlg,
 };
 
 #if !GTK_CHECK_VERSION(3,0,0)
