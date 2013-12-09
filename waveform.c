@@ -810,6 +810,7 @@ waveform_render (void *user_data)
             cairo_set_antialias (temp_cr, CAIRO_ANTIALIAS_NONE);
         }
 
+        int frames_per_buf_temp = frames_per_buf;
         int offset;
         int f_offset;
         float min, max, rms;
@@ -818,6 +819,7 @@ waveform_render (void *user_data)
         for (int ch = 0; ch < channels; ch++, top += (a.height / channels)) {
             f_offset = 0;
             offset = ch * VALUES_PER_FRAME;
+            frames_per_buf = frames_per_buf_temp;
             for (int x = 0; x < width; x++) {
                 if (offset + frames_per_buf > w->buffer_len) {
                     break;
