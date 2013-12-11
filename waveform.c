@@ -1118,6 +1118,23 @@ waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data
         g_source_remove (w->resizetimer);
     }
     w->resizetimer = g_timeout_add (500, waveform_redraw_thread, w);
+
+    // int fps = deadbeef->conf_get_int ("gtkui.refresh_rate", 10);
+    // if (fps < 1) {
+    //     fps = 1;
+    // }
+    // else if (fps > 30) {
+    //     fps = 30;
+    // }
+
+    // int tm = 1000/fps;
+
+    // if (w->drawtimer) {
+    //     g_source_remove (w->drawtimer);
+    //     w->drawtimer = 0;
+    // }
+    // w->drawtimer = g_timeout_add (tm, w_waveform_draw_cb, w);
+
     return FALSE;
 }
 
@@ -1232,15 +1249,26 @@ w_waveform_init (ddb_gtkui_widget_t *w)
         deadbeef->thread_detach (tid);
         deadbeef->pl_item_unref (it);
     }
-    if (wf->drawtimer) {
-        g_source_remove (wf->drawtimer);
-        wf->drawtimer = 0;
-    }
     if (wf->resizetimer) {
         g_source_remove (wf->resizetimer);
         wf->resizetimer = 0;
     }
-    wf->drawtimer = g_timeout_add (33, w_waveform_draw_cb, w);
+
+    int fps = deadbeef->conf_get_int ("gtkui.refresh_rate", 10);
+    if (fps < 1) {
+        fps = 1;
+    }
+    else if (fps > 30) {
+        fps = 30;
+    }
+
+    int tm = 1000/fps;
+
+    if (wf->drawtimer) {
+        g_source_remove (wf->drawtimer);
+        wf->drawtimer = 0;
+    }
+    wf->drawtimer = g_timeout_add (tm, w_waveform_draw_cb, w);
 }
 
 static ddb_gtkui_widget_t *
