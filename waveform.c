@@ -561,6 +561,15 @@ clearlooks_rounded_rectangle (cairo_t * cr,
 }
 
 static inline void
+draw_cairo_line_path (cairo_t* cr, DRECT *pts, const COLOUR *c)
+{
+    cairo_set_source_rgba (cr, C_COLOUR (c));
+    //cairo_move_to (cr, pts->x1, pts->y1);
+    cairo_line_to (cr, pts->x2, pts->y2);
+    //cairo_stroke (cr);
+}
+
+static inline void
 draw_cairo_line (cairo_t* cr, DRECT *pts, const COLOUR *c)
 {
     cairo_set_source_rgba (cr, C_COLOUR (c));
@@ -734,6 +743,10 @@ waveform_render (void *user_data)
 
     cairo_surface_flush (w->surf);
     cairo_t *temp_cr = cairo_create (w->surf);
+    cairo_t *max_cr = cairo_create (w->surf);
+    cairo_t *min_cr = cairo_create (w->surf);
+    cairo_t *rms_max_cr = cairo_create (w->surf);
+    cairo_t *rms_min_cr = cairo_create (w->surf);
 
     cairo_set_line_width (temp_cr, render.border_width);
     cairo_rectangle (temp_cr, left, 0, a.width, a.height);
@@ -741,6 +754,10 @@ waveform_render (void *user_data)
     cairo_set_source_rgba (temp_cr,CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f,1);
     cairo_fill (temp_cr);
     cairo_set_line_width (temp_cr, BORDER_LINE_WIDTH);
+    cairo_set_line_width (max_cr, BORDER_LINE_WIDTH);
+    cairo_set_line_width (min_cr, BORDER_LINE_WIDTH);
+    cairo_set_line_width (rms_max_cr, BORDER_LINE_WIDTH);
+    cairo_set_line_width (rms_min_cr, BORDER_LINE_WIDTH);
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_decoder_t *dec = NULL;
@@ -820,6 +837,12 @@ waveform_render (void *user_data)
             f_offset = 0;
             offset = ch * VALUES_PER_FRAME;
             frames_per_buf = frames_per_buf_temp;
+            if (CONFIG_RENDER_METHOD == SPIKES) {
+                cairo_move_to (max_cr, 0, top + height/2);
+                cairo_move_to (min_cr, 0, top + height/2);
+                cairo_move_to (rms_max_cr, 0, top + height/2);
+                cairo_move_to (rms_min_cr, 0, top + height/2);
+            }
             for (int x = 0; x < width; x++) {
                 if (offset + frames_per_buf > w->buffer_len) {
                     break;
@@ -870,7 +893,15 @@ waveform_render (void *user_data)
                 }
 
                 /* Draw Foreground - line */
-                if (TRUE) {
+                if (CONFIG_RENDER_METHOD == SPIKES) {
+                    DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
+                    draw_cairo_line_path (min_cr, &pts0, &render.c_fg);
+                    if (!render.rectified) {
+                        DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
+                        draw_cairo_line_path (max_cr, &pts1, &render.c_fg);
+                    }
+                }
+                else if (CONFIG_RENDER_METHOD == BARS) {
                     DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
                     draw_cairo_line (temp_cr, &pts0, &render.c_fg);
                     if (!render.rectified) {
@@ -879,7 +910,16 @@ waveform_render (void *user_data)
                     }
                 }
 
-                if (CONFIG_DISPLAY_RMS) {
+                if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == SPIKES) {
+                    DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
+                    draw_cairo_line_path (rms_min_cr, &pts0, &render.c_rms);
+
+                    if (!render.rectified) {
+                        DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
+                        draw_cairo_line_path (rms_max_cr, &pts1, &render.c_rms);
+                    }
+                }
+                else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
                     DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
                     draw_cairo_line (temp_cr, &pts0, &render.c_rms);
 
@@ -889,28 +929,28 @@ waveform_render (void *user_data)
                     }
                 }
 
-                /* Draw background - box */
-                if (TRUE) {
-                    if (render.rectified) {
-                        DRECT pts2 = { left + x, top + yoff - MIN (min, pmin), left + x, top + yoff };
-                        draw_cairo_line (temp_cr, &pts2, &render.c_fg);
-                    }
-                    else {
-                        DRECT pts2 = { left + x, top + yoff - MAX (pmin, min), left + x, top + yoff - MIN (pmax, max) };
-                        draw_cairo_line (temp_cr, &pts2, &render.c_fg);
-                    }
-                }
+                // /* Draw background - box */
+                // if (FALSE) {
+                //     if (render.rectified) {
+                //         DRECT pts2 = { left + x, top + yoff - MIN (min, pmin), left + x, top + yoff };
+                //         draw_cairo_line (temp_cr, &pts2, &render.c_fg);
+                //     }
+                //     else {
+                //         DRECT pts2 = { left + x, top + yoff - MAX (pmin, min), left + x, top + yoff - MIN (pmax, max) };
+                //         draw_cairo_line (temp_cr, &pts2, &render.c_fg);
+                //     }
+                // }
 
-                if (CONFIG_DISPLAY_RMS) {
-                    if (render.rectified) {
-                        DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff };
-                        draw_cairo_line (temp_cr, &pts2, &render.c_rms);
-                    }
-                    else {
-                        DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff + MIN (prms, rms) };
-                        draw_cairo_line (temp_cr, &pts2, &render.c_rms);
-                    }
-                }
+                // if (FALSE) {
+                //     if (render.rectified) {
+                //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff };
+                //         draw_cairo_line (temp_cr, &pts2, &render.c_rms);
+                //     }
+                //     else {
+                //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff + MIN (prms, rms) };
+                //         draw_cairo_line (temp_cr, &pts2, &render.c_rms);
+                //     }
+                //}
 
                 if (CONFIG_RENDER_METHOD == BARS) {
                     pmin = 0;
@@ -927,15 +967,33 @@ waveform_render (void *user_data)
                 frames_per_buf = frames_per_buf > (max_frames_per_x * frames_size) ? (max_frames_per_x * frames_size) : frames_per_buf;
                 frames_per_buf = frames_per_buf + ((frames_size) -(frames_per_buf % frames_size));
             }
+            if (CONFIG_RENDER_METHOD == SPIKES) {
+                cairo_line_to (max_cr, a.width, top + height/2);
+                cairo_line_to (min_cr, a.width, top + height/2);
+                cairo_line_to (rms_max_cr, a.width, top + height/2);
+                cairo_line_to (rms_min_cr, a.width, top + height/2);
+                cairo_close_path (max_cr);
+                cairo_close_path (min_cr);
+                cairo_close_path (rms_max_cr);
+                cairo_close_path (rms_min_cr);
+                cairo_fill (max_cr);
+                cairo_fill (min_cr);
+                cairo_fill (rms_max_cr);
+                cairo_fill (rms_min_cr);
+            }
             // center line
             if (!render.rectified) {
-                DRECT pts = { left, top + (0.5 * height) - x_off, left + width, top + (0.5 * height) + x_off };
+                DRECT pts = { left, top + (0.5 * height), left + width, top + (0.5 * height) };
                 draw_cairo_line (temp_cr, &pts, &render.c_cl);
             }
         }
         deadbeef->mutex_unlock (w->mutex);
     }
     cairo_destroy (temp_cr);
+    cairo_destroy (max_cr);
+    cairo_destroy (min_cr);
+    cairo_destroy (rms_max_cr);
+    cairo_destroy (rms_min_cr);
     if (dec && fileinfo) {
         dec->free (fileinfo);
         fileinfo = NULL;
