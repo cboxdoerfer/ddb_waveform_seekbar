@@ -948,7 +948,7 @@ waveform_generate_wavedata (gpointer user_data)
 {
     w_waveform_t *w = user_data;
     double width = MAX_VALUES_PER_CHANNEL;
-    long frames_per_buf, buffer_len;
+    long buffer_len;
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
@@ -989,33 +989,32 @@ waveform_generate_wavedata (gpointer user_data)
             float* buffer;
             if (fileinfo) {
                 int nframes_per_channel = (int)deadbeef->pl_get_item_duration(it) * fileinfo->fmt.samplerate;
-                const float frames_per_x = (float) nframes_per_channel / (float) width;
-                const long max_frames_per_x = 1 + ceilf (frames_per_x);
+                const long frames_per_buf = floorf((float) nframes_per_channel / (float) width);
+                const long max_frames_per_buf = 1 + frames_per_buf;
 
                 deadbeef->mutex_lock (w->mutex);
-                data = malloc (sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
+                data = malloc (sizeof (float) * max_frames_per_buf * fileinfo->fmt.channels);
                 if (!data) {
                     printf ("out of memory.\n");
                     deadbeef->pl_item_unref (it);
                     deadbeef->mutex_unlock (w->mutex);
                     return FALSE;
                 }
-                memset (data, 0, sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
+                memset (data, 0, sizeof (float) * max_frames_per_buf * fileinfo->fmt.channels);
                 deadbeef->mutex_unlock (w->mutex);
 
                 deadbeef->mutex_lock (w->mutex);
-                buffer = malloc (sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
+                buffer = malloc (sizeof (float) * max_frames_per_buf * fileinfo->fmt.channels);
                 if (!buffer) {
                     printf ("out of memory.\n");
                     deadbeef->pl_item_unref (it);
                     deadbeef->mutex_unlock (w->mutex);
                     return FALSE;
                 }
-                memset (buffer, 0, sizeof (float) * max_frames_per_x * fileinfo->fmt.channels);
+                memset (buffer, 0, sizeof (float) * max_frames_per_buf * fileinfo->fmt.channels);
                 deadbeef->mutex_unlock (w->mutex);
 
                 int channels = (!CONFIG_MIX_TO_MONO) ? 1 : fileinfo->fmt.channels;
-                frames_per_buf = floorf (frames_per_x);
                 buffer_len = frames_per_buf * fileinfo->fmt.channels;
 
                 ddb_waveformat_t out_fmt = {
