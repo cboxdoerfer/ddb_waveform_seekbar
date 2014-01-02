@@ -29,11 +29,9 @@ OUT_GTK3?=ddb_misc_waveform_GTK3.so
 
 GTK2_CFLAGS?=`pkg-config --cflags gtk+-2.0`
 GTK3_CFLAGS?=`pkg-config --cflags gtk+-3.0`
-LIBXML2_CFLAGS?=`pkg-config --cflags libxml-2.0`
 
 GTK2_LIBS?=`pkg-config --libs gtk+-2.0`
 GTK3_LIBS?=`pkg-config --libs gtk+-3.0`
-LIBXML2_LIBS?=`pkg-config --libs libxml-2.0`
 
 CC?=gcc
 CFLAGS+=-Wall -fPIC -std=c99 -D_GNU_SOURCE
@@ -73,21 +71,21 @@ mkdir_gtk3:
 
 $(GTK2_DIR)/$(OUT_GTK2): $(OBJ_GTK2)
 	@echo "Linking GTK+2 version"
-	@$(call link, $(OBJ_GTK2), $(LIBXML2_LIBS), $(GTK2_LIBS))
+	@$(call link, $(OBJ_GTK2), $(GTK2_LIBS))
 	@echo "Done!"
 
 $(GTK3_DIR)/$(OUT_GTK3): $(OBJ_GTK3)
 	@echo "Linking GTK+3 version"
-	@$(call link, $(OBJ_GTK3), $(LIBXML2_LIBS), $(GTK3_LIBS))
+	@$(call link, $(OBJ_GTK3), $(GTK3_LIBS))
 	@echo "Done!"
 
 $(GTK2_DIR)/%.o: %.c
 	@echo "Compiling $(subst $(GTK2_DIR)/,,$@)"
-	@$(call compile, $(LIBXML2_CFLAGS), $(GTK2_CFLAGS))
+	@$(call compile, $(GTK2_CFLAGS))
 
 $(GTK3_DIR)/%.o: %.c
-	@echo "Compiling $(subst $(GTK3_DIR)/,,$@)" 
-	@$(call compile, $(LIBXML2_CFLAGS), $(GTK3_CFLAGS))
+	@echo "Compiling $(subst $(GTK3_DIR)/,,$@)"
+	@$(call compile, $(GTK3_CFLAGS))
 
 clean:
 	@echo "Cleaning files from previous build..."
