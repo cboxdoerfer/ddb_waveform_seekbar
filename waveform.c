@@ -448,7 +448,7 @@ waveform_redraw_thread (void *user_data)
 {
     w_waveform_t *w = user_data;
     w->resizetimer = 0;
-    intptr_t tid = deadbeef->thread_start (waveform_render, w);
+    intptr_t tid = deadbeef->thread_start_low_priority (waveform_render, w);
     deadbeef->thread_detach (tid);
     gtk_widget_queue_draw (w->drawarea);
     return FALSE;
@@ -1257,7 +1257,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
     intptr_t tid;
     switch (id) {
     case DB_EV_SONGSTARTED:
-        tid = deadbeef->thread_start (waveform_get_wavedata, w);
+        tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
         break;
     case DB_EV_TRACKINFOCHANGED:
@@ -1302,7 +1302,7 @@ w_waveform_init (ddb_gtkui_widget_t *w)
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     if (it) {
-        intptr_t tid = deadbeef->thread_start (waveform_get_wavedata, w);
+        intptr_t tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
         deadbeef->pl_item_unref (it);
     }
