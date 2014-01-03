@@ -523,6 +523,20 @@ enum
     CORNER_ALL         = 15
 };
 
+void color_contrast (GdkColor * color)
+{
+    int d = 0;
+    // Counting the perceptive luminance - human eye favors green color...
+    double a = 1 - ( 0.299 * color->red + 0.587 * color->green + 0.114 * color->blue)/65535;
+    if (a < 0.5)
+        d = 0; // bright colors - black font
+    else
+        d = 65535; // dark colors - white font
+    color->red = d;
+    color->blue = d;
+    color->green = d;
+}
+
 static void
 clearlooks_rounded_rectangle (cairo_t * cr,
                   double x, double y, double w, double h,
@@ -686,7 +700,9 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
             clearlooks_rounded_rectangle (cr, rec_pos, (a.height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
             cairo_fill (cr);
             cairo_move_to (cr, text_pos, (a.height + ex.height)/2);
-            cairo_set_source_rgba (cr, 1, 1, 1, 1);
+            GdkColor color_text = CONFIG_PB_COLOR;
+            color_contrast (&color_text);
+            cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
             cairo_show_text (cr, s);
             cairo_restore (cr);
         }
