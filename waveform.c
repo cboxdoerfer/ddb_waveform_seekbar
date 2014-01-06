@@ -220,8 +220,8 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     GtkWidget *label04;
     GtkWidget *frame02;
     GtkWidget *vbox14;
-    GtkWidget *render_method_bars;
     GtkWidget *render_method_spikes;
+    GtkWidget *render_method_bars;
     GtkWidget *dialog_action_area13;
     GtkWidget *applybutton1;
     GtkWidget *cancelbutton1;
@@ -306,13 +306,13 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_widget_show (vbox14);
     gtk_container_add (GTK_CONTAINER (frame02), vbox14);
 
-    render_method_bars = gtk_radio_button_new_with_label (NULL, "Bars");
-    gtk_widget_show (render_method_bars);
-    gtk_box_pack_start (GTK_BOX (vbox14), render_method_bars, TRUE, TRUE, 0);
-
-    render_method_spikes = gtk_radio_button_new_with_label_from_widget ((GtkRadioButton *)render_method_bars, "Spikes");
+    render_method_spikes = gtk_radio_button_new_with_label (NULL, "Spikes");
     gtk_widget_show (render_method_spikes);
     gtk_box_pack_start (GTK_BOX (vbox14), render_method_spikes, TRUE, TRUE, 0);
+
+    render_method_bars = gtk_radio_button_new_with_label_from_widget ((GtkRadioButton *)render_method_spikes, "Bars");
+    gtk_widget_show (render_method_bars);
+    gtk_box_pack_start (GTK_BOX (vbox14), render_method_bars, TRUE, TRUE, 0);
 
     downmix_to_mono = gtk_check_button_new_with_label ("Downmix to mono");
     gtk_widget_show (downmix_to_mono);
@@ -358,11 +358,11 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (log_scale), CONFIG_LOG_ENABLED);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (display_rms), CONFIG_DISPLAY_RMS);
 
-    if (CONFIG_RENDER_METHOD == BARS) {
-        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_bars), TRUE);
+    if (CONFIG_RENDER_METHOD == SPIKES) {
+        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_spikes), TRUE);
     }
     else {
-        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_spikes), TRUE);
+        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_bars), TRUE);
     }
 
     for (;;) {
@@ -379,11 +379,11 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
             CONFIG_MIX_TO_MONO = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (downmix_to_mono));
             CONFIG_LOG_ENABLED = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (log_scale));
             CONFIG_DISPLAY_RMS = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (display_rms));
-            if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_bars)) == TRUE) {
-                CONFIG_RENDER_METHOD = BARS;
-            }
-            else if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_spikes)) == TRUE) {
+            if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_spikes)) == TRUE) {
                 CONFIG_RENDER_METHOD = SPIKES;
+            }
+            else if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_bars)) == TRUE) {
+                CONFIG_RENDER_METHOD = BARS;
             }
             save_config ();
             deadbeef->sendmessage (DB_EV_CONFIGCHANGED, 0, 0, 0);
