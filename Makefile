@@ -33,9 +33,11 @@ GTK3_CFLAGS?=`pkg-config --cflags gtk+-3.0`
 GTK2_LIBS?=`pkg-config --libs gtk+-2.0`
 GTK3_LIBS?=`pkg-config --libs gtk+-3.0`
 
+SQLITE_LIBS?=-lsqlite3
+
 CC?=gcc
 CFLAGS+=-Wall -fPIC -std=c99 -D_GNU_SOURCE
-LDFLAGS+=-shared -lsqlite3
+LDFLAGS+=-shared
 
 GTK2_DIR?=gtk2
 GTK3_DIR?=gtk3
@@ -71,12 +73,12 @@ mkdir_gtk3:
 
 $(GTK2_DIR)/$(OUT_GTK2): $(OBJ_GTK2)
 	@echo "Linking GTK+2 version"
-	@$(call link, $(OBJ_GTK2), $(GTK2_LIBS))
+	@$(call link, $(OBJ_GTK2), $(GTK2_LIBS), $(SQLITE_LIBS))
 	@echo "Done!"
 
 $(GTK3_DIR)/$(OUT_GTK3): $(OBJ_GTK3)
 	@echo "Linking GTK+3 version"
-	@$(call link, $(OBJ_GTK3), $(GTK3_LIBS))
+	@$(call link, $(OBJ_GTK3), $(GTK3_LIBS), $(SQLITE_LIBS))
 	@echo "Done!"
 
 $(GTK2_DIR)/%.o: %.c
