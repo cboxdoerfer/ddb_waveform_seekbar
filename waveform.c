@@ -35,6 +35,7 @@
 
 #include <deadbeef/deadbeef.h>
 #include <deadbeef/gtkui_api.h>
+#include "cache.h"
 
 #define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
@@ -44,7 +45,7 @@
 #define SPIKES (2)
 // min, max, rms
 #define VALUES_PER_FRAME (3)
-#define MAX_VALUES_PER_CHANNEL (4096)
+#define MAX_VALUES_PER_CHANNEL (2048)
 
 #define     CONFSTR_WF_LOG_ENABLED       "waveform.log_enabled"
 #define     CONFSTR_WF_MIX_TO_MONO       "waveform.mix_to_mono"
@@ -68,12 +69,16 @@
 #define     CONFSTR_WF_FG_RMS_ALPHA      "waveform.fg_rms_alpha"
 
 #define     CONFSTR_WF_MAX_FILE_LENGTH   "waveform.max_file_length"
+#define     CONFSTR_WF_CACHE_ENABLED     "waveform.cache_enabled"
 
 
 /* Global variables */
 static DB_misc_t            plugin;
 static DB_functions_t *     deadbeef = NULL;
 static ddb_gtkui_t *        gtkui_plugin = NULL;
+
+static char cache_path[PATH_MAX];
+static int cache_path_size;
 
 typedef struct
 {
@@ -86,6 +91,8 @@ typedef struct
     float *buffer;
     size_t max_buffer_len;
     size_t buffer_len;
+    int channels;
+    int read;
     int rendering;
     int nsamples;
     int seekbar_moving;
@@ -132,6 +139,7 @@ static guint16  CONFIG_PB_ALPHA;
 static guint16  CONFIG_FG_RMS_ALPHA;
 static gint     CONFIG_RENDER_METHOD = SPIKES;
 static gint     CONFIG_MAX_FILE_LENGTH = 180;
+static gboolean CONFIG_CACHE_ENABLED = FALSE;
 
 static void
 save_config (void)
@@ -141,6 +149,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_DISPLAY_RMS,         CONFIG_DISPLAY_RMS);
     deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
     deadbeef->conf_set_int (CONFSTR_WF_MAX_FILE_LENGTH,     CONFIG_MAX_FILE_LENGTH);
+    deadbeef->conf_set_int (CONFSTR_WF_CACHE_ENABLED,       CONFIG_CACHE_ENABLED);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,          CONFIG_BG_COLOR.red);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_G,          CONFIG_BG_COLOR.green);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_B,          CONFIG_BG_COLOR.blue);
@@ -168,6 +177,7 @@ load_config (void)
     CONFIG_DISPLAY_RMS = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RMS,              TRUE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
+    CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,         FALSE);
 
     CONFIG_BG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,             50000);
     CONFIG_BG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,           50000);
@@ -358,11 +368,13 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (log_scale), CONFIG_LOG_ENABLED);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (display_rms), CONFIG_DISPLAY_RMS);
 
-    if (CONFIG_RENDER_METHOD == SPIKES) {
+    switch (CONFIG_RENDER_METHOD) {
+    case SPIKES:
         gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_spikes), TRUE);
-    }
-    else {
+        break;
+    case BARS:
         gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_bars), TRUE);
+        break;
     }
 
     for (;;) {
@@ -395,6 +407,15 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     }
     gtk_widget_destroy (waveform_properties);
     return;
+}
+
+int
+make_cache_dir (char *path, int size) {
+    const char *cache = getenv ("XDG_CACHE_HOME");
+    int sz;
+    sz = snprintf (path, size, cache ? "%s/deadbeef/waveform/" : "%s/.cache/deadbeef/waveform/", cache ? cache : getenv ("HOME"));
+    mkdir (path, 0700);
+    return sz;
 }
 
 void
@@ -769,252 +790,235 @@ waveform_render (void *user_data)
     cairo_stroke_preserve (temp_cr);
     cairo_set_source_rgba (temp_cr,CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f,1);
     cairo_fill (temp_cr);
+
     cairo_set_line_width (temp_cr, BORDER_LINE_WIDTH);
     cairo_set_line_width (max_cr, BORDER_LINE_WIDTH);
     cairo_set_line_width (min_cr, BORDER_LINE_WIDTH);
     cairo_set_line_width (rms_max_cr, BORDER_LINE_WIDTH);
     cairo_set_line_width (rms_min_cr, BORDER_LINE_WIDTH);
 
-    DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
-    DB_decoder_t *dec = NULL;
-    DB_fileinfo_t *fileinfo = NULL;
+    int channels = w->channels;
+    int frames_size = VALUES_PER_FRAME * channels;
+    float frames_per_x;
 
-    if (it) {
-        deadbeef->pl_lock ();
-        const char *dec_meta = deadbeef->pl_find_meta_raw (it, ":DECODER");
-        char decoder_id[100];
-        if (dec_meta) {
-            strncpy (decoder_id, dec_meta, sizeof (decoder_id));
+    if (channels != 0) {
+        frames_per_x = w->buffer_len / (float)(width * frames_size);
+        height /= channels;
+        top /= channels;
+    }
+    else {
+        frames_per_x = w->buffer_len / (float)(width * VALUES_PER_FRAME);
+    }
+    int max_frames_per_x = 1 + ceilf (frames_per_x);
+    int frames_per_buf = floorf (frames_per_x * (float)(frames_size));
+
+    float x_off;
+    if (CONFIG_RENDER_METHOD == BARS) {
+        x_off = 0.0;
+        cairo_set_line_width (temp_cr, 1);
+        cairo_set_antialias (temp_cr, CAIRO_ANTIALIAS_NONE);
+    }
+    else {
+        x_off = 0.5;
+    }
+
+    if (CONFIG_MIX_TO_MONO) {
+        frames_size = VALUES_PER_FRAME;
+        channels = 1;
+        frames_per_x = w->buffer_len / ((float)width * frames_size);
+        max_frames_per_x = 1 + ceilf (frames_per_x);
+        frames_per_buf = floorf (frames_per_x * (float)(frames_size));
+        height = a.height * 0.9;
+        top = (a.height - height)/2;
+    }
+
+    int frames_per_buf_temp = frames_per_buf;
+    int offset;
+    int f_offset;
+    float min, max, rms;
+
+    deadbeef->mutex_lock (w->mutex);
+    for (int ch = 0; ch < channels; ch++, top += (a.height / channels)) {
+        f_offset = 0;
+        offset = ch * VALUES_PER_FRAME;
+        frames_per_buf = frames_per_buf_temp;
+
+        if (CONFIG_RENDER_METHOD == SPIKES) {
+            cairo_move_to (max_cr, 0, top + height/2);
+            cairo_move_to (min_cr, 0, top + height/2);
+            cairo_move_to (rms_max_cr, 0, top + height/2);
+            cairo_move_to (rms_min_cr, 0, top + height/2);
         }
-        DB_decoder_t **decoders = deadbeef->plug_get_decoder_list ();
-        for (int i = 0; decoders[i]; i++) {
-            if (!strcmp (decoders[i]->plugin.id, decoder_id)) {
-                dec = decoders[i];
+
+        for (int x = 0; x < width; x++) {
+            if (offset + frames_per_buf > w->buffer_len) {
                 break;
             }
-        }
-        deadbeef->pl_unlock ();
-        if (dec) {
-            fileinfo = dec->open (0);
-            if (fileinfo && dec->init (fileinfo, DB_PLAYITEM (it)) != 0) {
-                deadbeef->pl_lock ();
-                fprintf (stderr, "waveform: failed to decode file %s\n", deadbeef->pl_find_meta (it, ":URI"));
-                deadbeef->pl_unlock ();
-            }
-        }
-        deadbeef->pl_item_unref (it);
-    }
-    if (fileinfo) {
-        int channels = fileinfo->fmt.channels;
-        int frames_size = VALUES_PER_FRAME * channels;
-        float frames_per_x;
+            double yoff;
 
-        if (channels != 0) {
-            frames_per_x = w->buffer_len / (float)(width * frames_size);
-            height /= channels;
-            top /= channels;
-        }
-        else {
-            frames_per_x = w->buffer_len / (float)(width * VALUES_PER_FRAME);
-        }
-        int max_frames_per_x = 1 + ceilf (frames_per_x);
-        int frames_per_buf = floorf (frames_per_x * (float)(frames_size));
-
-        float x_off;
-        if (CONFIG_RENDER_METHOD == BARS) {
-            x_off = 0.0;
-        }
-        else {
-            x_off = 0.5;
-        }
-
-        if (CONFIG_MIX_TO_MONO) {
-            frames_size = VALUES_PER_FRAME;
-            channels = 1;
-            frames_per_x = w->buffer_len / ((float)width * frames_size);
-            max_frames_per_x = 1 + ceilf (frames_per_x);
-            frames_per_buf = floorf (frames_per_x * (float)(frames_size));
-            height = a.height * 0.9;
-            top = (a.height - height)/2;
-        }
-
-        if (CONFIG_RENDER_METHOD == BARS) {
-            cairo_set_line_width (temp_cr, 1);
-            cairo_set_antialias (temp_cr, CAIRO_ANTIALIAS_NONE);
-        }
-
-        int frames_per_buf_temp = frames_per_buf;
-        int offset;
-        int f_offset;
-        float min, max, rms;
-
-        deadbeef->mutex_lock (w->mutex);
-        for (int ch = 0; ch < channels; ch++, top += (a.height / channels)) {
-            f_offset = 0;
-            offset = ch * VALUES_PER_FRAME;
-            frames_per_buf = frames_per_buf_temp;
-            if (CONFIG_RENDER_METHOD == SPIKES) {
-                cairo_move_to (max_cr, 0, top + height/2);
-                cairo_move_to (min_cr, 0, top + height/2);
-                cairo_move_to (rms_max_cr, 0, top + height/2);
-                cairo_move_to (rms_min_cr, 0, top + height/2);
-            }
-            for (int x = 0; x < width; x++) {
-                if (offset + frames_per_buf > w->buffer_len) {
-                    break;
-                }
-                double yoff;
+            if (w->read) {
                 min = 1.0; max = -1.0; rms = 0.0;
-
-                int offset_temp = offset;
-                for (int j = offset; j < offset + frames_per_buf; j = j + frames_size) {
-                    max = MAX (max, w->buffer[j]);
-                    min = MIN (min, w->buffer[j+1]);
-                    rms = (rms + w->buffer[j+2])/2;
-                    offset_temp += frames_size;
-                }
-                offset = offset_temp;
-
-                if (gain != 1.0) {
-                    min *= gain;
-                    max *= gain;
-                    rms *= gain;
-                }
-
-                if (render.logscale) {
-                   if (max > 0)
-                        max = alt_log_meter (coefficient_to_dB (max));
-                    else
-                        max = -alt_log_meter (coefficient_to_dB (-max));
-
-                    if (min > 0)
-                        min = alt_log_meter (coefficient_to_dB (min));
-                    else
-                        min = -alt_log_meter (coefficient_to_dB (-min));
-
-                    rms = alt_log_meter (coefficient_to_dB (rms));
-                }
-
-                if (render.rectified) {
-                    yoff = height;
-                    min = height * MAX (fabsf (min), fabsf (max));
-                    max = 0;
-                    rms = height * rms;
-                }
-                else {
-                    yoff = 0.5 * height;
-                    min = min * yoff;
-                    max = max * yoff;
-                    rms = rms * yoff;
-                }
-
-                /* Draw Foreground - line */
-                if (CONFIG_RENDER_METHOD == SPIKES) {
-                    DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
-                    draw_cairo_line_path (min_cr, &pts0, &render.c_fg);
-                    if (!render.rectified) {
-                        DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
-                        draw_cairo_line_path (max_cr, &pts1, &render.c_fg);
-                    }
-                }
-                else if (CONFIG_RENDER_METHOD == BARS) {
-                    DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
-                    draw_cairo_line (temp_cr, &pts0, &render.c_fg);
-                    if (!render.rectified) {
-                        DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
-                        draw_cairo_line (temp_cr, &pts1, &render.c_fg);
-                    }
-                }
-
-                if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == SPIKES) {
-                    DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
-                    draw_cairo_line_path (rms_min_cr, &pts0, &render.c_rms);
-
-                    if (!render.rectified) {
-                        DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
-                        draw_cairo_line_path (rms_max_cr, &pts1, &render.c_rms);
-                    }
-                }
-                else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
-                    DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
-                    draw_cairo_line (temp_cr, &pts0, &render.c_rms);
-
-                    if (!render.rectified) {
-                        DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
-                        draw_cairo_line (temp_cr, &pts1, &render.c_rms);
-                    }
-                }
-
-                // /* Draw background - box */
-                // if (FALSE) {
-                //     if (render.rectified) {
-                //         DRECT pts2 = { left + x, top + yoff - MIN (min, pmin), left + x, top + yoff };
-                //         draw_cairo_line (temp_cr, &pts2, &render.c_fg);
-                //     }
-                //     else {
-                //         DRECT pts2 = { left + x, top + yoff - MAX (pmin, min), left + x, top + yoff - MIN (pmax, max) };
-                //         draw_cairo_line (temp_cr, &pts2, &render.c_fg);
-                //     }
-                // }
-
-                // if (FALSE) {
-                //     if (render.rectified) {
-                //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff };
-                //         draw_cairo_line (temp_cr, &pts2, &render.c_rms);
-                //     }
-                //     else {
-                //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff + MIN (prms, rms) };
-                //         draw_cairo_line (temp_cr, &pts2, &render.c_rms);
-                //     }
-                //}
-
-                if (CONFIG_RENDER_METHOD == BARS) {
-                    pmin = 0;
-                    pmax = 0;
-                    prms = 0;
-                }
-                else {
-                    pmin = min;
-                    pmax = max;
-                    prms = rms;
-                }
-                f_offset += frames_per_buf;
-                frames_per_buf = floorf ((x + 1) * frames_per_x * frames_size) - f_offset;
-                frames_per_buf = frames_per_buf > (max_frames_per_x * frames_size) ? (max_frames_per_x * frames_size) : frames_per_buf;
-                frames_per_buf = frames_per_buf + ((frames_size) -(frames_per_buf % frames_size));
             }
+            else {
+                min = 0.0; max = 0.0; rms = 0.0;
+            }
+
+            int offset_temp = offset;
+            for (int j = offset; j < offset + frames_per_buf; j = j + frames_size) {
+                max = MAX (max, w->buffer[j]);
+                min = MIN (min, w->buffer[j+1]);
+                rms = (rms + w->buffer[j+2])/2;
+                offset_temp += frames_size;
+            }
+            offset = offset_temp;
+
+            if (gain != 1.0) {
+                min *= gain;
+                max *= gain;
+                rms *= gain;
+            }
+
+            if (render.logscale) {
+               if (max > 0)
+                    max = alt_log_meter (coefficient_to_dB (max));
+                else
+                    max = -alt_log_meter (coefficient_to_dB (-max));
+
+                if (min > 0)
+                    min = alt_log_meter (coefficient_to_dB (min));
+                else
+                    min = -alt_log_meter (coefficient_to_dB (-min));
+
+                rms = alt_log_meter (coefficient_to_dB (rms));
+            }
+
+            if (render.rectified) {
+                yoff = height;
+                min = height * MAX (fabsf (min), fabsf (max));
+                max = 0;
+                rms = height * rms;
+            }
+            else {
+                yoff = 0.5 * height;
+                min = min * yoff;
+                max = max * yoff;
+                rms = rms * yoff;
+            }
+
+            /* Draw Foreground - line */
             if (CONFIG_RENDER_METHOD == SPIKES) {
-                cairo_line_to (max_cr, a.width, top + height/2);
-                cairo_line_to (min_cr, a.width, top + height/2);
-                cairo_line_to (rms_max_cr, a.width, top + height/2);
-                cairo_line_to (rms_min_cr, a.width, top + height/2);
-                cairo_close_path (max_cr);
-                cairo_close_path (min_cr);
-                cairo_close_path (rms_max_cr);
-                cairo_close_path (rms_min_cr);
-                cairo_fill (max_cr);
-                cairo_fill (min_cr);
-                cairo_fill (rms_max_cr);
-                cairo_fill (rms_min_cr);
+                DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
+                draw_cairo_line_path (min_cr, &pts0, &render.c_fg);
+                if (!render.rectified) {
+                    DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
+                    draw_cairo_line_path (max_cr, &pts1, &render.c_fg);
+                }
             }
-            // center line
-            if (!render.rectified) {
-                DRECT pts = { left, top + (0.5 * height), left + width, top + (0.5 * height) };
-                draw_cairo_line (temp_cr, &pts, &render.c_cl);
+            else if (CONFIG_RENDER_METHOD == BARS) {
+                DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
+                draw_cairo_line (temp_cr, &pts0, &render.c_fg);
+                if (!render.rectified) {
+                    DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
+                    draw_cairo_line (temp_cr, &pts1, &render.c_fg);
+                }
             }
+
+            if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == SPIKES) {
+                DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
+                draw_cairo_line_path (rms_min_cr, &pts0, &render.c_rms);
+
+                if (!render.rectified) {
+                    DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
+                    draw_cairo_line_path (rms_max_cr, &pts1, &render.c_rms);
+                }
+            }
+            else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
+                DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
+                draw_cairo_line (temp_cr, &pts0, &render.c_rms);
+
+                if (!render.rectified) {
+                    DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
+                    draw_cairo_line (temp_cr, &pts1, &render.c_rms);
+                }
+            }
+
+            // /* Draw background - box */
+            // if (FALSE) {
+            //     if (render.rectified) {
+            //         DRECT pts2 = { left + x, top + yoff - MIN (min, pmin), left + x, top + yoff };
+            //         draw_cairo_line (temp_cr, &pts2, &render.c_fg);
+            //     }
+            //     else {
+            //         DRECT pts2 = { left + x, top + yoff - MAX (pmin, min), left + x, top + yoff - MIN (pmax, max) };
+            //         draw_cairo_line (temp_cr, &pts2, &render.c_fg);
+            //     }
+            // }
+
+            // if (FALSE) {
+            //     if (render.rectified) {
+            //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff };
+            //         draw_cairo_line (temp_cr, &pts2, &render.c_rms);
+            //     }
+            //     else {
+            //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff + MIN (prms, rms) };
+            //         draw_cairo_line (temp_cr, &pts2, &render.c_rms);
+            //     }
+            //}
+
+            if (CONFIG_RENDER_METHOD == BARS) {
+                pmin = 0;
+                pmax = 0;
+                prms = 0;
+            }
+            else {
+                pmin = min;
+                pmax = max;
+                prms = rms;
+            }
+            f_offset += frames_per_buf;
+            frames_per_buf = floorf ((x + 1) * frames_per_x * frames_size) - f_offset;
+            frames_per_buf = frames_per_buf > (max_frames_per_x * frames_size) ? (max_frames_per_x * frames_size) : frames_per_buf;
+            frames_per_buf = frames_per_buf + ((frames_size) - (frames_per_buf % frames_size));
         }
-        deadbeef->mutex_unlock (w->mutex);
+        if (CONFIG_RENDER_METHOD == SPIKES) {
+            cairo_line_to (max_cr, a.width, top + height/2);
+            cairo_line_to (min_cr, a.width, top + height/2);
+            cairo_line_to (rms_max_cr, a.width, top + height/2);
+            cairo_line_to (rms_min_cr, a.width, top + height/2);
+            cairo_close_path (max_cr);
+            cairo_close_path (min_cr);
+            cairo_close_path (rms_max_cr);
+            cairo_close_path (rms_min_cr);
+            cairo_fill (max_cr);
+            cairo_fill (min_cr);
+            cairo_fill (rms_max_cr);
+            cairo_fill (rms_min_cr);
+        }
+        // center line
+        if (!render.rectified) {
+            DRECT pts = { left, top + (0.5 * height), left + width, top + (0.5 * height) };
+            draw_cairo_line (temp_cr, &pts, &render.c_cl);
+        }
     }
+    deadbeef->mutex_unlock (w->mutex);
     cairo_destroy (temp_cr);
     cairo_destroy (max_cr);
     cairo_destroy (min_cr);
     cairo_destroy (rms_max_cr);
     cairo_destroy (rms_min_cr);
-    if (dec && fileinfo) {
-        dec->free (fileinfo);
-        fileinfo = NULL;
-    }
     return;
+}
+
+void
+waveform_db_cache (gpointer user_data, char const *uri)
+{
+    w_waveform_t *w = user_data;
+    deadbeef->mutex_lock (w->mutex);
+    waveform_db_open (cache_path, cache_path_size);
+    waveform_db_init (uri);
+    waveform_db_write (uri, w->buffer, w->buffer_len * sizeof(float), w->channels, 0);
+    waveform_db_close ();
+    deadbeef->mutex_unlock (w->mutex);
 }
 
 gboolean
@@ -1027,6 +1031,22 @@ waveform_generate_wavedata (gpointer user_data)
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
     if (it) {
+        char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
+        gboolean cache_enabled = CONFIG_CACHE_ENABLED;
+        if (cache_enabled) {
+            deadbeef->mutex_lock (w->mutex);
+            waveform_db_open (cache_path, cache_path_size);
+            w->buffer_len = waveform_db_read (uri, w->buffer, w->max_buffer_len, &w->channels);
+            if ( w->buffer_len > 0 ) {
+                w->read = 1;
+                deadbeef->pl_item_unref (it);
+                waveform_db_close ();
+                deadbeef->mutex_unlock (w->mutex);
+                return TRUE;
+            }
+            waveform_db_close ();
+            deadbeef->mutex_unlock (w->mutex);
+        }
         if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != -1) {
             deadbeef->pl_item_unref (it);
             deadbeef->mutex_lock (w->mutex);
@@ -1062,6 +1082,7 @@ waveform_generate_wavedata (gpointer user_data)
             float* data;
             float* buffer;
             if (fileinfo) {
+                w->channels = fileinfo->fmt.channels;
                 int nframes_per_channel = (int)deadbeef->pl_get_item_duration(it) * fileinfo->fmt.samplerate;
                 const long frames_per_buf = floorf((float) nframes_per_channel / (float) width);
                 const long max_frames_per_buf = 1 + frames_per_buf;
@@ -1106,23 +1127,23 @@ waveform_generate_wavedata (gpointer user_data)
 
                 int eof = 0;
                 int counter = 0;
-                while (TRUE) {
-                    if (eof) {
-                        //printf ("end of file.\n");
-                        break;
-                    }
+                while (!eof) {
                     //ugly hack
                     //buffer_len = buffer_len + ((fileinfo->fmt.channels * 2) -(buffer_len % (fileinfo->fmt.channels * 2)));
 
                     int sz = dec->read (fileinfo, (char *)buffer, buffer_len);
                     if (sz != buffer_len) {
                         eof = 1;
+                    } else if (sz == 0) {
+                        break;
                     }
+
                     deadbeef->pcm_convert (&fileinfo->fmt, (char *)buffer, &out_fmt, (char *)data, sz);
 
                     int frame;
                     float min, max, rms;
                     int ch;
+
                     for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
                         if (counter >= w->max_buffer_len) {
                             break;
@@ -1149,6 +1170,10 @@ waveform_generate_wavedata (gpointer user_data)
                     }
                 }
                 w->buffer_len = counter;
+                if (cache_enabled) {
+                    waveform_db_cache (w, uri);
+                }
+                w->read = 1;
                 free (data);
                 free (buffer);
             }
@@ -1273,6 +1298,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
     intptr_t tid;
     switch (id) {
     case DB_EV_SONGSTARTED:
+        w->read = 0;
         tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
         break;
@@ -1306,8 +1332,8 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     gtk_widget_get_allocation (wf->drawarea, &a);
     wf->max_buffer_len = VALUES_PER_FRAME * sizeof(float) * MAX_VALUES_PER_CHANNEL * 4;
     deadbeef->mutex_lock (wf->mutex);
-    wf->buffer = malloc (sizeof (float) * wf->max_buffer_len);
-    memset (wf->buffer, 0, sizeof (float) * wf->max_buffer_len);
+    wf->buffer = malloc (sizeof(float) * wf->max_buffer_len);
+    memset (wf->buffer, 0, sizeof(float) * wf->max_buffer_len);
     wf->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
     deadbeef->mutex_unlock (wf->mutex);
     wf->rendering = 0;
@@ -1315,6 +1341,8 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     wf->seekbar_moved = 0;
     wf->height = a.height;
     wf->width = a.width;
+
+    cache_path_size = make_cache_dir (cache_path, sizeof(cache_path));
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     if (it) {
@@ -1429,7 +1457,8 @@ waveform_disconnect (void)
 
 static const char settings_dlg[] =
     "property \"Ignore files longer than x minutes "
-                "(-1 scans every file): \"          spinbtn[-1,9999,1] "      CONFSTR_WF_MAX_FILE_LENGTH        " 180 ;\n"
+                "(-1 scans every file): \"          spinbtn[-1,9999,1] "     CONFSTR_WF_MAX_FILE_LENGTH        " 180 ;\n"
+    "property \"Enable cache (experimental) \"      checkbox "               CONFSTR_WF_CACHE_ENABLED          " 0 ;\n"
 ;
 
 static DB_misc_t plugin = {
