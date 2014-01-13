@@ -1028,6 +1028,11 @@ waveform_generate_wavedata (gpointer user_data)
     double width = MAX_VALUES_PER_CHANNEL;
     long buffer_len;
 
+    deadbeef->mutex_lock (w->mutex);
+    memset (w->buffer, 0, w->max_buffer_len);
+    deadbeef->mutex_unlock (w->mutex);
+    w->buffer_len = 0;
+
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
     if (it) {
@@ -1049,16 +1054,17 @@ waveform_generate_wavedata (gpointer user_data)
         }
         if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != -1) {
             deadbeef->pl_item_unref (it);
-            deadbeef->mutex_lock (w->mutex);
-            memset (w->buffer, 0, w->max_buffer_len);
-            w->buffer_len = 0;
-            deadbeef->mutex_unlock (w->mutex);
             printf ("waveform: file too long.\n");
-            return TRUE;
+            return FALSE;
         }
 
         deadbeef->pl_lock ();
         const char *dec_meta = deadbeef->pl_find_meta_raw (it, ":DECODER");
+        if (strcmp(dec_meta,"cda") == 0) {
+            deadbeef->pl_item_unref (it);
+            deadbeef->pl_unlock ();
+            return FALSE;
+        }
         char decoder_id[100];
         if (dec_meta) {
             strncpy (decoder_id, dec_meta, sizeof (decoder_id));
