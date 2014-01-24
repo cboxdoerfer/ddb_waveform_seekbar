@@ -42,11 +42,11 @@ waveform_db_read (char const *fname, float *buffer, int buffer_len, int *channel
     rc = sqlite3_step (p);
 
     if(0){
-         fprintf(stderr, "read: SQL error: %s\n", sqlite3_errstr(rc));
-         sqlite3_free(zErrMsg);
-         sqlite3_finalize (p);
-         waveform_db_close ();
-         return 0;
+        fprintf(stderr, "read: SQL error: %d\n", rc);
+        sqlite3_free(zErrMsg);
+        sqlite3_finalize (p);
+        waveform_db_close ();
+        return 0;
     }
 
     *channels = sqlite3_column_int (p,0);
@@ -74,32 +74,32 @@ waveform_db_write (char const *fname, float *buffer, int buffer_len, int channel
     char* query = "INSERT INTO wave (path, channels, compression, data) VALUES (?, ?, ?, ?);";
     rc = sqlite3_prepare_v2 (db, query, strlen(query), &p, NULL);
     if( rc!=SQLITE_OK ){
-        fprintf(stderr, "write_perpare: SQL error: %s\n", sqlite3_errstr(rc));
+        fprintf(stderr, "write_perpare: SQL error: %d\n", rc);
         sqlite3_free(zErrMsg);
     }
     rc = sqlite3_bind_text (p, 1, fname, -1, SQLITE_STATIC);
     if( rc!=SQLITE_OK ){
-        fprintf(stderr, "write_fname: SQL error: %s\n", sqlite3_errstr(rc));
+        fprintf(stderr, "write_fname: SQL error: %d\n", rc);
         sqlite3_free(zErrMsg);
     }
     rc = sqlite3_bind_int (p, 2, channels);
     if( rc!=SQLITE_OK ){
-        fprintf(stderr, "write_channels: SQL error: %s\n", sqlite3_errstr(rc));
+        fprintf(stderr, "write_channels: SQL error: %d\n", rc);
         sqlite3_free(zErrMsg);
     }
     rc = sqlite3_bind_int (p, 3, compression);
     if( rc!=SQLITE_OK ){
-        fprintf(stderr, "write_channels: SQL error: %s\n", sqlite3_errstr(rc));
+        fprintf(stderr, "write_compression: SQL error: %d\n", rc);
         sqlite3_free(zErrMsg);
     }
     rc = sqlite3_bind_blob (p, 4, buffer, buffer_len, SQLITE_STATIC);
     if( rc!=SQLITE_OK ){
-        fprintf(stderr, "write_data: SQL error: %s\n", sqlite3_errstr(rc));
+        fprintf(stderr, "write_data: SQL error: %d\n", rc);
         sqlite3_free(zErrMsg);
     }
     rc = sqlite3_step (p);
     if( rc!=SQLITE_DONE ){
-        fprintf(stderr, "write_exec: SQL error: %s\n", sqlite3_errstr(rc));
+        fprintf(stderr, "write_exec: SQL error: %d\n", rc);
         sqlite3_free(zErrMsg);
     }
     sqlite3_finalize (p);
