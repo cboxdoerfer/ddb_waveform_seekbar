@@ -106,12 +106,14 @@ typedef struct
 } w_waveform_t;
 
 typedef struct DRECT
-{   double x1, y1;
+{
+    double x1, y1;
     double x2, y2;
 } DRECT;
 
 typedef struct COLOUR
-{   double r;
+{
+    double r;
     double g;
     double b;
     double a;
@@ -128,6 +130,7 @@ enum WHAT { PEAK = 1, RMS = 2 };
 
 static gboolean CONFIG_LOG_ENABLED = FALSE;
 static gboolean CONFIG_MIX_TO_MONO = FALSE;
+static gboolean CONFIG_CACHE_ENABLED = FALSE;
 static gboolean CONFIG_DISPLAY_RMS = TRUE;
 static GdkColor CONFIG_BG_COLOR;
 static GdkColor CONFIG_FG_COLOR;
@@ -139,7 +142,6 @@ static guint16  CONFIG_PB_ALPHA;
 static guint16  CONFIG_FG_RMS_ALPHA;
 static gint     CONFIG_RENDER_METHOD = SPIKES;
 static gint     CONFIG_MAX_FILE_LENGTH = 180;
-static gboolean CONFIG_CACHE_ENABLED = FALSE;
 
 static void
 save_config (void)
@@ -209,27 +211,28 @@ on_config_changed (uintptr_t ctx)
 }
 
 static void
-on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
+on_button_config (GtkMenuItem *menuitem, gpointer user_data)
+{
     GtkWidget *waveform_properties;
     GtkWidget *config_dialog;
     GtkWidget *vbox01;
-    GtkWidget *label00;
-    GtkWidget *frame01;
-    GtkWidget *table01;
-    GtkWidget *label01;
+    GtkWidget *color_label;
+    GtkWidget *color_frame;
+    GtkWidget *color_table;
+    GtkWidget *color_background_label;
     GtkWidget *background_color;
-    GtkWidget *label02;
+    GtkWidget *color_waveform_label;
     GtkWidget *foreground_color;
-    GtkWidget *label05;
+    GtkWidget *color_rms_label;
     GtkWidget *foreground_rms_color;
-    GtkWidget *label03;
+    GtkWidget *color_progressbar_label;
     GtkWidget *progressbar_color;
     GtkWidget *downmix_to_mono;
     GtkWidget *log_scale;
     GtkWidget *display_rms;
-    GtkWidget *label04;
-    GtkWidget *frame02;
-    GtkWidget *vbox14;
+    GtkWidget *style_label;
+    GtkWidget *style_frame;
+    GtkWidget *vbox02;
     GtkWidget *render_method_spikes;
     GtkWidget *render_method_bars;
     GtkWidget *dialog_action_area13;
@@ -250,79 +253,79 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
     gtk_box_pack_start (GTK_BOX (config_dialog), vbox01, FALSE, FALSE, 0);
     gtk_container_set_border_width (GTK_CONTAINER (vbox01), 12);
 
-    label00 = gtk_label_new (NULL);
-    gtk_label_set_markup (GTK_LABEL(label00),"<b>Colors</b>");
-    gtk_widget_show (label00);
+    color_label = gtk_label_new (NULL);
+    gtk_label_set_markup (GTK_LABEL(color_label),"<b>Colors</b>");
+    gtk_widget_show (color_label);
 
-    frame01 = gtk_frame_new ("Colors");
-    gtk_frame_set_label_widget ((GtkFrame *)frame01, label00);
-    gtk_frame_set_shadow_type ((GtkFrame *)frame01, GTK_SHADOW_IN);
-    gtk_widget_show (frame01);
-    gtk_box_pack_start (GTK_BOX (vbox01), frame01, TRUE, FALSE, 0);
+    color_frame = gtk_frame_new ("Colors");
+    gtk_frame_set_label_widget ((GtkFrame *)color_frame, color_label);
+    gtk_frame_set_shadow_type ((GtkFrame *)color_frame, GTK_SHADOW_IN);
+    gtk_widget_show (color_frame);
+    gtk_box_pack_start (GTK_BOX (vbox01), color_frame, TRUE, FALSE, 0);
 
-    table01 = gtk_table_new (2, 4, TRUE);
-    gtk_widget_show (table01);
-    gtk_container_add (GTK_CONTAINER (frame01), table01);
-    gtk_table_set_col_spacings ((GtkTable *) table01, 8);
-    gtk_container_set_border_width (GTK_CONTAINER (table01), 6);
+    color_table = gtk_table_new (2, 4, TRUE);
+    gtk_widget_show (color_table);
+    gtk_container_add (GTK_CONTAINER (color_frame), color_table);
+    gtk_table_set_col_spacings ((GtkTable *) color_table, 8);
+    gtk_container_set_border_width (GTK_CONTAINER (color_table), 6);
 
-    label01 = gtk_label_new ("Background");
-    gtk_widget_show (label01);
-    gtk_table_attach_defaults ((GtkTable *) table01, label01, 0,1,0,1);
+    color_background_label = gtk_label_new ("Background");
+    gtk_widget_show (color_background_label);
+    gtk_table_attach_defaults ((GtkTable *) color_table, color_background_label, 0,1,0,1);
 
-    label02 = gtk_label_new ("Waveform");
-    gtk_widget_show (label02);
-    gtk_table_attach_defaults ((GtkTable *) table01, label02, 1,2,0,1);
+    color_waveform_label = gtk_label_new ("Waveform");
+    gtk_widget_show (color_waveform_label);
+    gtk_table_attach_defaults ((GtkTable *) color_table, color_waveform_label, 1,2,0,1);
 
-    label05 = gtk_label_new ("RMS");
-    gtk_widget_show (label05);
-    gtk_table_attach_defaults ((GtkTable *) table01, label05, 2,3,0,1);
+    color_rms_label = gtk_label_new ("RMS");
+    gtk_widget_show (color_rms_label);
+    gtk_table_attach_defaults ((GtkTable *) color_table, color_rms_label, 2,3,0,1);
 
-    label03 = gtk_label_new ("Progressbar");
-    gtk_widget_show (label03);
-    gtk_table_attach_defaults ((GtkTable *) table01, label03, 3,4,0,1);
+    color_progressbar_label = gtk_label_new ("Progressbar");
+    gtk_widget_show (color_progressbar_label);
+    gtk_table_attach_defaults ((GtkTable *) color_table, color_progressbar_label, 3,4,0,1);
 
     background_color = gtk_color_button_new ();
     gtk_color_button_set_use_alpha ((GtkColorButton *)background_color, TRUE);
     gtk_widget_show (background_color);
-    gtk_table_attach_defaults ((GtkTable *) table01, background_color, 0,1,1,2);
+    gtk_table_attach_defaults ((GtkTable *) color_table, background_color, 0,1,1,2);
 
     foreground_color = gtk_color_button_new ();
     gtk_color_button_set_use_alpha ((GtkColorButton *)foreground_color, TRUE);
     gtk_widget_show (foreground_color);
-    gtk_table_attach_defaults ((GtkTable *) table01, foreground_color, 1,2,1,2);
+    gtk_table_attach_defaults ((GtkTable *) color_table, foreground_color, 1,2,1,2);
 
     foreground_rms_color = gtk_color_button_new ();
     gtk_color_button_set_use_alpha ((GtkColorButton *)foreground_rms_color, TRUE);
     gtk_widget_show (foreground_rms_color);
-    gtk_table_attach_defaults ((GtkTable *) table01, foreground_rms_color, 2,3,1,2);
+    gtk_table_attach_defaults ((GtkTable *) color_table, foreground_rms_color, 2,3,1,2);
 
     progressbar_color = gtk_color_button_new ();
     gtk_color_button_set_use_alpha ((GtkColorButton *)progressbar_color, TRUE);
     gtk_widget_show (progressbar_color);
-    gtk_table_attach_defaults ((GtkTable *) table01, progressbar_color, 3,4,1,2);
+    gtk_table_attach_defaults ((GtkTable *) color_table, progressbar_color, 3,4,1,2);
 
-    label04 = gtk_label_new (NULL);
-    gtk_label_set_markup (GTK_LABEL(label04),"<b>Style</b>");
-    gtk_widget_show (label04);
+    style_label = gtk_label_new (NULL);
+    gtk_label_set_markup (GTK_LABEL(style_label),"<b>Style</b>");
+    gtk_widget_show (style_label);
 
-    frame02 = gtk_frame_new ("Style");
-    gtk_frame_set_label_widget ((GtkFrame *)frame02, label04);
-    gtk_frame_set_shadow_type ((GtkFrame *)frame02, GTK_SHADOW_IN);
-    gtk_widget_show (frame02);
-    gtk_box_pack_start (GTK_BOX (vbox01), frame02, FALSE, FALSE, 0);
+    style_frame = gtk_frame_new ("Style");
+    gtk_frame_set_label_widget ((GtkFrame *)style_frame, style_label);
+    gtk_frame_set_shadow_type ((GtkFrame *)style_frame, GTK_SHADOW_IN);
+    gtk_widget_show (style_frame);
+    gtk_box_pack_start (GTK_BOX (vbox01), style_frame, FALSE, FALSE, 0);
 
-    vbox14 = gtk_vbox_new (FALSE, 6);
-    gtk_widget_show (vbox14);
-    gtk_container_add (GTK_CONTAINER (frame02), vbox14);
+    vbox02 = gtk_vbox_new (FALSE, 6);
+    gtk_widget_show (vbox02);
+    gtk_container_add (GTK_CONTAINER (style_frame), vbox02);
 
     render_method_spikes = gtk_radio_button_new_with_label (NULL, "Spikes");
     gtk_widget_show (render_method_spikes);
-    gtk_box_pack_start (GTK_BOX (vbox14), render_method_spikes, TRUE, TRUE, 0);
+    gtk_box_pack_start (GTK_BOX (vbox02), render_method_spikes, TRUE, TRUE, 0);
 
     render_method_bars = gtk_radio_button_new_with_label_from_widget ((GtkRadioButton *)render_method_spikes, "Bars");
     gtk_widget_show (render_method_bars);
-    gtk_box_pack_start (GTK_BOX (vbox14), render_method_bars, TRUE, TRUE, 0);
+    gtk_box_pack_start (GTK_BOX (vbox02), render_method_bars, TRUE, TRUE, 0);
 
     downmix_to_mono = gtk_check_button_new_with_label ("Downmix to mono");
     gtk_widget_show (downmix_to_mono);
@@ -410,7 +413,8 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data) {
 }
 
 int
-make_cache_dir (char *path, int size) {
+make_cache_dir (char *path, int size)
+{
     const char *cache = getenv ("XDG_CACHE_HOME");
     int sz;
     sz = snprintf (path, size, cache ? "%s/deadbeef/waveform/" : "%s/.cache/deadbeef/waveform/", cache ? cache : getenv ("HOME"));
@@ -473,25 +477,6 @@ waveform_redraw_thread (void *user_data)
     deadbeef->thread_detach (tid);
     gtk_widget_queue_draw (w->drawarea);
     return FALSE;
-}
-
-static inline void
-_draw_vline (uint8_t *data, int stride, int x0, int y0, int y1)
-{
-    if (y0 > y1) {
-        int tmp = y0;
-        y0 = y1;
-        y1 = tmp;
-        y1--;
-    }
-    else if (y0 < y1) {
-        y0++;
-    }
-    while (y0 <= y1) {
-        uint32_t *ptr = (uint32_t*)&data[y0*stride+x0*4];
-        *ptr = 0xffffffff;
-        y0++;
-    }
 }
 
 static inline void
@@ -637,7 +622,6 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
         else {
             pos = 0;
         }
-        //deadbeef->pl_item_unref (trk);
     }
 
     if (a.height != w->height || a.width != w->width) {
@@ -779,19 +763,19 @@ waveform_render (void *user_data)
     w->rendering = 0;
 
     cairo_surface_flush (w->surf);
-    cairo_t *temp_cr = cairo_create (w->surf);
+    cairo_t *cr = cairo_create (w->surf);
     cairo_t *max_cr = cairo_create (w->surf);
     cairo_t *min_cr = cairo_create (w->surf);
     cairo_t *rms_max_cr = cairo_create (w->surf);
     cairo_t *rms_min_cr = cairo_create (w->surf);
 
-    cairo_set_line_width (temp_cr, render.border_width);
-    cairo_rectangle (temp_cr, left, 0, a.width, a.height);
-    cairo_stroke_preserve (temp_cr);
-    cairo_set_source_rgba (temp_cr,CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f,1);
-    cairo_fill (temp_cr);
+    cairo_set_line_width (cr, render.border_width);
+    cairo_rectangle (cr, left, 0, a.width, a.height);
+    cairo_stroke_preserve (cr);
+    cairo_set_source_rgba (cr,CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f,1);
+    cairo_fill (cr);
 
-    cairo_set_line_width (temp_cr, BORDER_LINE_WIDTH);
+    cairo_set_line_width (cr, BORDER_LINE_WIDTH);
     cairo_set_line_width (max_cr, BORDER_LINE_WIDTH);
     cairo_set_line_width (min_cr, BORDER_LINE_WIDTH);
     cairo_set_line_width (rms_max_cr, BORDER_LINE_WIDTH);
@@ -815,8 +799,8 @@ waveform_render (void *user_data)
     float x_off;
     if (CONFIG_RENDER_METHOD == BARS) {
         x_off = 0.0;
-        cairo_set_line_width (temp_cr, 1);
-        cairo_set_antialias (temp_cr, CAIRO_ANTIALIAS_NONE);
+        cairo_set_line_width (cr, 1);
+        cairo_set_antialias (cr, CAIRO_ANTIALIAS_NONE);
     }
     else {
         x_off = 0.5;
@@ -916,10 +900,10 @@ waveform_render (void *user_data)
             }
             else if (CONFIG_RENDER_METHOD == BARS) {
                 DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
-                draw_cairo_line (temp_cr, &pts0, &render.c_fg);
+                draw_cairo_line (cr, &pts0, &render.c_fg);
                 if (!render.rectified) {
                     DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
-                    draw_cairo_line (temp_cr, &pts1, &render.c_fg);
+                    draw_cairo_line (cr, &pts1, &render.c_fg);
                 }
             }
 
@@ -934,11 +918,11 @@ waveform_render (void *user_data)
             }
             else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
                 DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
-                draw_cairo_line (temp_cr, &pts0, &render.c_rms);
+                draw_cairo_line (cr, &pts0, &render.c_rms);
 
                 if (!render.rectified) {
                     DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
-                    draw_cairo_line (temp_cr, &pts1, &render.c_rms);
+                    draw_cairo_line (cr, &pts1, &render.c_rms);
                 }
             }
 
@@ -946,22 +930,22 @@ waveform_render (void *user_data)
             // if (FALSE) {
             //     if (render.rectified) {
             //         DRECT pts2 = { left + x, top + yoff - MIN (min, pmin), left + x, top + yoff };
-            //         draw_cairo_line (temp_cr, &pts2, &render.c_fg);
+            //         draw_cairo_line (cr, &pts2, &render.c_fg);
             //     }
             //     else {
             //         DRECT pts2 = { left + x, top + yoff - MAX (pmin, min), left + x, top + yoff - MIN (pmax, max) };
-            //         draw_cairo_line (temp_cr, &pts2, &render.c_fg);
+            //         draw_cairo_line (cr, &pts2, &render.c_fg);
             //     }
             // }
 
             // if (FALSE) {
             //     if (render.rectified) {
             //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff };
-            //         draw_cairo_line (temp_cr, &pts2, &render.c_rms);
+            //         draw_cairo_line (cr, &pts2, &render.c_rms);
             //     }
             //     else {
             //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff + MIN (prms, rms) };
-            //         draw_cairo_line (temp_cr, &pts2, &render.c_rms);
+            //         draw_cairo_line (cr, &pts2, &render.c_rms);
             //     }
             //}
 
@@ -997,11 +981,11 @@ waveform_render (void *user_data)
         // center line
         if (!render.rectified) {
             DRECT pts = { left, top + (0.5 * height), left + width, top + (0.5 * height) };
-            draw_cairo_line (temp_cr, &pts, &render.c_cl);
+            draw_cairo_line (cr, &pts, &render.c_cl);
         }
     }
     deadbeef->mutex_unlock (w->mutex);
-    cairo_destroy (temp_cr);
+    cairo_destroy (cr);
     cairo_destroy (max_cr);
     cairo_destroy (min_cr);
     cairo_destroy (rms_max_cr);
@@ -1042,7 +1026,7 @@ waveform_generate_wavedata (gpointer user_data)
             deadbeef->mutex_lock (w->mutex);
             waveform_db_open (cache_path, cache_path_size);
             w->buffer_len = waveform_db_read (uri, w->buffer, w->max_buffer_len, &w->channels);
-            if ( w->buffer_len > 0 ) {
+            if (w->buffer_len > 0) {
                 w->read = 1;
                 deadbeef->pl_item_unref (it);
                 waveform_db_close ();
@@ -1140,7 +1124,8 @@ waveform_generate_wavedata (gpointer user_data)
                     int sz = dec->read (fileinfo, (char *)buffer, buffer_len);
                     if (sz != buffer_len) {
                         eof = 1;
-                    } else if (sz == 0) {
+                    }
+                    else if (sz == 0) {
                         break;
                     }
 
@@ -1510,13 +1495,15 @@ static DB_misc_t plugin = {
 
 #if !GTK_CHECK_VERSION(3,0,0)
 DB_plugin_t *
-ddb_misc_waveform_GTK2_load (DB_functions_t *ddb) {
+ddb_misc_waveform_GTK2_load (DB_functions_t *ddb)
+{
     deadbeef = ddb;
     return &plugin.plugin;
 }
 #else
 DB_plugin_t *
-ddb_misc_waveform_GTK3_load (DB_functions_t *ddb) {
+ddb_misc_waveform_GTK3_load (DB_functions_t *ddb)
+{
     deadbeef = ddb;
     return &plugin.plugin;
 }
