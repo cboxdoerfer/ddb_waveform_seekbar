@@ -1020,12 +1020,17 @@ waveform_generate_wavedata (gpointer user_data)
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
     if (it) {
+        deadbeef->pl_lock ();
         char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
+        int len = strlen (uri);
+        char fname[len+1];
+        strcpy (fname, uri);
+        deadbeef->pl_unlock ();
         gboolean cache_enabled = CONFIG_CACHE_ENABLED;
         if (cache_enabled) {
             deadbeef->mutex_lock (w->mutex);
             waveform_db_open (cache_path, cache_path_size);
-            w->buffer_len = waveform_db_read (uri, w->buffer, w->max_buffer_len, &w->channels);
+            w->buffer_len = waveform_db_read (fname, w->buffer, w->max_buffer_len, &w->channels);
             if (w->buffer_len > 0) {
                 w->read = 1;
                 deadbeef->pl_item_unref (it);
@@ -1162,7 +1167,7 @@ waveform_generate_wavedata (gpointer user_data)
                 }
                 w->buffer_len = counter;
                 if (cache_enabled) {
-                    waveform_db_cache (w, uri);
+                    waveform_db_cache (w, fname);
                 }
                 w->read = 1;
                 free (data);
