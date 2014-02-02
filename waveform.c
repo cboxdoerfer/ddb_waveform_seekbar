@@ -1048,12 +1048,16 @@ waveform_generate_wavedata (gpointer user_data)
         }
 
         deadbeef->pl_lock ();
-        const char *dec_meta = deadbeef->pl_find_meta_raw (it, ":DECODER");
-        if (strcmp(dec_meta,"cda") == 0) {
-            deadbeef->pl_item_unref (it);
-            deadbeef->pl_unlock ();
-            return FALSE;
+        const char *file_meta = deadbeef->pl_find_meta_raw (it, ":FILETYPE");
+        if (file_meta) {
+            if (strcmp(file_meta,"cdda") == 0) {
+                deadbeef->pl_item_unref (it);
+                deadbeef->pl_unlock ();
+                return FALSE;
+            }
         }
+
+        const char *dec_meta = deadbeef->pl_find_meta_raw (it, ":DECODER");
         char decoder_id[100];
         if (dec_meta) {
             strncpy (decoder_id, dec_meta, sizeof (decoder_id));
