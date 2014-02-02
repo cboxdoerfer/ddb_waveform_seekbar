@@ -36,6 +36,45 @@ waveform_db_init (char const *fname)
 }
 
 int
+waveform_db_cached (char const *fname)
+{
+    int rc;
+    sqlite3_stmt* p = 0;
+
+    char* query = sqlite3_mprintf ("SELECT * FROM wave WHERE path = '%q'", fname);
+    rc = sqlite3_prepare_v2 (db, query, strlen(query), &p, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "cached_perpare: SQL error: %d\n", rc);
+    }
+    rc = sqlite3_step (p);
+    if (rc == SQLITE_ROW) {
+        sqlite3_finalize (p);
+        return 1;
+    }
+    sqlite3_finalize (p);
+    return 0;
+}
+
+int
+waveform_db_delete (char const *fname)
+{
+    int rc;
+    sqlite3_stmt* p = 0;
+
+    char* query = sqlite3_mprintf ("DELETE FROM wave WHERE path = '%q'", fname);
+    rc = sqlite3_prepare_v2 (db, query, strlen(query), &p, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "delete_perpare: SQL error: %d\n", rc);
+    }
+    rc = sqlite3_step (p);
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "delete_exec: SQL error: %d\n", rc);
+    }
+    sqlite3_finalize (p);
+    return 1;
+}
+
+int
 waveform_db_read (char const *fname, float *buffer, int buffer_len, int *channels)
 {
     int rc;

@@ -19,6 +19,12 @@ void
 waveform_db_init (char const *fname);
 
 int
+waveform_db_cached (char const *fname);
+
+int
+waveform_db_delete (char const *fname);
+
+int
 waveform_db_read (char const *fname, float *buffer, int buffer_len, int *channels);
 
 void

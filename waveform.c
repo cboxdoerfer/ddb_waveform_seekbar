@@ -1194,6 +1194,46 @@ waveform_get_wavedata (gpointer user_data)
     deadbeef->background_job_decrement ();
 }
 
+int
+waveform_delete (DB_playItem_t *it)
+{
+    int result;
+    deadbeef->pl_lock ();
+    if (it) {
+        char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
+        //g_message ("%s",uri);
+        waveform_db_open (cache_path, cache_path_size);
+        waveform_db_init (NULL);
+        result = waveform_db_delete (uri);
+        waveform_db_close ();
+    }
+    else {
+        result = -1;
+    }
+    deadbeef->pl_unlock ();
+    return result;
+}
+
+int
+waveform_cached (DB_playItem_t *it)
+{
+    int result;
+    deadbeef->pl_lock ();
+    if (it) {
+        char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
+        //g_message ("%s",uri);
+        waveform_db_open (cache_path, cache_path_size);
+        waveform_db_init (NULL);
+        result = waveform_db_cached (uri);
+        waveform_db_close ();
+    }
+    else {
+        result = -1;
+    }
+    deadbeef->pl_unlock ();
+    return result;
+}
+
 gboolean
 waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
@@ -1451,6 +1491,64 @@ waveform_disconnect (void)
     return 0;
 }
 
+static int
+waveform_action_lookup (DB_plugin_action_t *action, int ctx)
+{
+    DB_playItem_t *it = NULL;
+    deadbeef->pl_lock ();
+    if (ctx == DDB_ACTION_CTX_SELECTION) {
+        ddb_playlist_t *plt = deadbeef->plt_get_curr ();
+        if (plt) {
+            it = deadbeef->plt_get_first (plt, PL_MAIN);
+            while (it) {
+                if (deadbeef->pl_is_selected (it)) {
+                    if (waveform_cached (it)) {
+                        waveform_delete (it);
+                    }
+                }
+                DB_playItem_t *next = deadbeef->pl_get_next (it, PL_MAIN);
+                deadbeef->pl_item_unref (it);
+                it = next;
+            }
+            deadbeef->plt_unref (plt);
+        }
+    }
+    if (it) {
+        deadbeef->pl_item_unref (it);
+    }
+    deadbeef->pl_unlock ();
+    return 0;
+}
+
+static DB_plugin_action_t lookup_action = {
+    .title = "Remove Waveform From Cache",
+    .name = "waveform_lookup",
+    .flags = DB_ACTION_MULTIPLE_TRACKS | DB_ACTION_ADD_MENU,
+    .callback2 = waveform_action_lookup,
+    .next = NULL
+};
+
+static DB_plugin_action_t *
+waveform_get_actions (DB_playItem_t *it)
+{
+    deadbeef->pl_lock ();
+    lookup_action.flags |= DB_ACTION_DISABLED;
+    DB_playItem_t *current = deadbeef->pl_get_first (PL_MAIN);
+    while (current) {
+        if (deadbeef->pl_is_selected (current) && waveform_cached (current)) {
+            lookup_action.flags &= ~DB_ACTION_DISABLED;
+            deadbeef->pl_item_unref (current);
+            break;
+        }
+        DB_playItem_t *next = deadbeef->pl_get_next (current, PL_MAIN);
+        deadbeef->pl_item_unref (current);
+        current = next;
+    }
+    deadbeef->pl_unlock ();
+    return &lookup_action;
+}
+
+
 static const char settings_dlg[] =
     "property \"Ignore files longer than x minutes "
                 "(-1 scans every file): \"          spinbtn[-1,9999,1] "     CONFSTR_WF_MAX_FILE_LENGTH        " 180 ;\n"
@@ -1496,6 +1594,7 @@ static DB_misc_t plugin = {
     .plugin.connect         = waveform_connect,
     .plugin.disconnect      = waveform_disconnect,
     .plugin.configdialog    = settings_dlg,
+    .plugin.get_actions     = waveform_get_actions,
 };
 
 #if !GTK_CHECK_VERSION(3,0,0)
