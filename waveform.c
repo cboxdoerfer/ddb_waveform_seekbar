@@ -614,16 +614,6 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
         return FALSE;
     }
 
-    DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
-    if (trk) {
-        if (deadbeef->pl_get_item_duration (trk) > 0) {
-            pos = (deadbeef->streamer_get_playpos () * width)/ deadbeef->pl_get_item_duration (trk);
-        }
-        else {
-            pos = 0;
-        }
-    }
-
     if (a.height != w->height || a.width != w->width) {
         cairo_save (cr);
         cairo_translate(cr, 0, 0);
@@ -637,78 +627,100 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
         cairo_paint (cr);
     }
 
-    cairo_set_source_rgba (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f,CONFIG_PB_ALPHA/65535.f);
-    cairo_rectangle (cr, 0, 0, pos, a.height);
-    cairo_fill (cr);
-
-    cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
-    cairo_rectangle (cr, pos - cursor_width, 0, cursor_width, a.height);
-    cairo_fill (cr);
-
-    if (w->seekbar_moving && trk) {
-        if (w->seekbar_move_x < 0) {
-            seek_pos = 0;
-        }
-        else if (w->seekbar_move_x > width) {
-            seek_pos = width;
-        }
-        else {
-            seek_pos = w->seekbar_move_x;
-        }
-
-        cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
-        cairo_rectangle (cr, seek_pos - cursor_width, 0, cursor_width, a.height);
-        cairo_fill (cr);
-        if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
-            w->seekbar_move_x_clicked = -1;
-            float time = 0;
-            float dur = deadbeef->pl_get_item_duration (trk);
-
-            if (w->seekbar_moved > 0) {
-                time = deadbeef->streamer_get_playpos ();
-            }
-            else {
-                time = w->seekbar_move_x * dur / (a.width);
-            }
-
-            if (time < 0) {
-                time = 0;
-            }
-            if (time > dur) {
-                time = dur;
-            }
-            char s[1000];
-            int hr = time/3600;
-            int mn = (time-hr*3600)/60;
-            int sc = time-hr*3600-mn*60;
-            snprintf (s, sizeof (s), "%02d:%02d:%02d", hr, mn, sc);
-
-            cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
-            cairo_save (cr);
-            cairo_set_font_size (cr, 20);
-
-            cairo_text_extents_t ex;
-            cairo_text_extents (cr, s, &ex);
-
-            int rec_width = ex.width + 10;
-            int rec_height = ex.height + 10;
-            int rec_pos = seek_pos - rec_width;
-            int text_pos = rec_pos + 5;
-
-            if (seek_pos < rec_width) {
-                rec_pos = 0;
-                text_pos = rec_pos + 5;
-            }
-
-            uint8_t corners = 0xff;
-
-            clearlooks_rounded_rectangle (cr, rec_pos, (a.height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
+    DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
+    if (trk) {
+        if (deadbeef->pl_get_item_duration (trk) > 0) {
+            pos = (deadbeef->streamer_get_playpos () * width)/ deadbeef->pl_get_item_duration (trk);
+            cairo_set_source_rgba (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f,CONFIG_PB_ALPHA/65535.f);
+            cairo_rectangle (cr, 0, 0, pos, a.height);
             cairo_fill (cr);
-            cairo_move_to (cr, text_pos, (a.height + ex.height)/2);
-            GdkColor color_text = CONFIG_PB_COLOR;
+
+            cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
+            cairo_rectangle (cr, pos - cursor_width, 0, cursor_width, a.height);
+            cairo_fill (cr);
+
+            if (w->seekbar_moving && trk && deadbeef->pl_get_item_duration (trk) > 0) {
+                if (w->seekbar_move_x < 0) {
+                    seek_pos = 0;
+                }
+                else if (w->seekbar_move_x > width) {
+                    seek_pos = width;
+                }
+                else {
+                    seek_pos = w->seekbar_move_x;
+                }
+
+                cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
+                cairo_rectangle (cr, seek_pos - cursor_width, 0, cursor_width, a.height);
+                cairo_fill (cr);
+                if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
+                    w->seekbar_move_x_clicked = -1;
+                    float time = 0;
+                    float dur = deadbeef->pl_get_item_duration (trk);
+
+                    if (w->seekbar_moved > 0) {
+                        time = deadbeef->streamer_get_playpos ();
+                    }
+                    else {
+                        time = w->seekbar_move_x * dur / (a.width);
+                    }
+
+                    if (time < 0) {
+                        time = 0;
+                    }
+                    if (time > dur) {
+                        time = dur;
+                    }
+                    char s[1000];
+                    int hr = time/3600;
+                    int mn = (time-hr*3600)/60;
+                    int sc = time-hr*3600-mn*60;
+                    snprintf (s, sizeof (s), "%02d:%02d:%02d", hr, mn, sc);
+
+                    cairo_save (cr);
+                    cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
+                    cairo_set_font_size (cr, 18);
+
+                    cairo_text_extents_t ex;
+                    cairo_text_extents (cr, s, &ex);
+
+                    int rec_width = ex.width + 10;
+                    int rec_height = ex.height + 10;
+                    int rec_pos = seek_pos - rec_width;
+                    int text_pos = rec_pos + 5;
+
+                    if (seek_pos < rec_width) {
+                        rec_pos = 0;
+                        text_pos = rec_pos + 5;
+                    }
+
+                    uint8_t corners = 0xff;
+
+                    clearlooks_rounded_rectangle (cr, rec_pos, (a.height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
+                    cairo_fill (cr);
+                    cairo_move_to (cr, text_pos, (a.height + ex.height)/2);
+                    GdkColor color_text = CONFIG_PB_COLOR;
+                    color_contrast (&color_text);
+                    cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
+                    cairo_show_text (cr, s);
+                    cairo_restore (cr);
+                }
+            }
+        }
+        else if (deadbeef->is_local_file (deadbeef->pl_find_meta (trk, ":URI")) == 0) {
+            const char *text = "Streaming...";
+            cairo_save (cr);
+            cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
+            cairo_set_font_size (cr, 18);
+            cairo_text_extents_t ex;
+            cairo_text_extents (cr, text, &ex);
+            int text_x = (a.width - ex.width)/2;
+            int text_y = (a.height + ex.height)/2;
+            cairo_move_to (cr, text_x, text_y);
+            GdkColor color_text = CONFIG_BG_COLOR;
             color_contrast (&color_text);
             cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
-            cairo_show_text (cr, s);
+            cairo_show_text (cr, text);
             cairo_restore (cr);
         }
     }
@@ -823,6 +835,9 @@ waveform_render (void *user_data)
 
     deadbeef->mutex_lock (w->mutex);
     for (int ch = 0; ch < channels; ch++, top += (a.height / channels)) {
+        if (w->channels == 0) {
+            break;
+        }
         f_offset = 0;
         offset = ch * VALUES_PER_FRAME;
         frames_per_buf = frames_per_buf_temp;
@@ -1019,7 +1034,7 @@ waveform_generate_wavedata (gpointer user_data)
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
-    if (it) {
+    if (it && deadbeef->is_local_file (deadbeef->pl_find_meta (it, ":URI"))) {
         deadbeef->pl_lock ();
         char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
         int len = strlen (uri);
@@ -1178,12 +1193,14 @@ waveform_generate_wavedata (gpointer user_data)
                 free (buffer);
             }
         }
-
-        deadbeef->pl_item_unref (it);
         if (dec && fileinfo) {
             dec->free (fileinfo);
             fileinfo = NULL;
         }
+    }
+
+    if (it) {
+        deadbeef->pl_item_unref (it);
     }
     return TRUE;
 }
@@ -1302,23 +1319,17 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
         break;
-    case DB_EV_TRACKINFOCHANGED:
-        {
-            ddb_event_track_t *ev = (ddb_event_track_t *)ctx;
-            DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
-            if (it == ev->track) {
-                g_idle_add (waveform_redraw_cb, w);
-            }
-            if (it) {
-                deadbeef->pl_item_unref (it);
-            }
-        }
+    case DB_EV_SONGCHANGED:
+        deadbeef->mutex_lock (w->mutex);
+        memset (w->buffer, 0, sizeof(float) * w->max_buffer_len);
+        deadbeef->mutex_unlock (w->mutex);
+        w->buffer_len = 0;
+        w->channels = 0;
+        g_idle_add (waveform_redraw_cb, w);
         break;
     case DB_EV_CONFIGCHANGED:
-        {
-            on_config_changed (ctx);
-            g_idle_add (waveform_redraw_cb, w);
-        }
+        on_config_changed (ctx);
+        g_idle_add (waveform_redraw_cb, w);
         break;
     }
     return 0;
