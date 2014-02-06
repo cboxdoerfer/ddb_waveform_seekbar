@@ -1476,7 +1476,7 @@ static DB_misc_t plugin = {
     //DB_PLUGIN_SET_API_VERSION
     .plugin.type            = DB_PLUGIN_MISC,
     .plugin.api_vmajor      = 1,
-    .plugin.api_vminor      = 0,
+    .plugin.api_vminor      = 5,
     .plugin.version_major   = 0,
     .plugin.version_minor   = 1,
 #if GTK_CHECK_VERSION(3,0,0)
