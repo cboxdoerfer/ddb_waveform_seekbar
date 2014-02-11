@@ -584,9 +584,7 @@ static inline void
 draw_cairo_line_path (cairo_t* cr, DRECT *pts, const COLOUR *c)
 {
     cairo_set_source_rgba (cr, C_COLOUR (c));
-    //cairo_move_to (cr, pts->x1, pts->y1);
     cairo_line_to (cr, pts->x2, pts->y2);
-    //cairo_stroke (cr);
 }
 
 static inline void
@@ -940,29 +938,6 @@ waveform_render (void *user_data)
                     draw_cairo_line (cr, &pts1, &render.c_rms);
                 }
             }
-
-            // /* Draw background - box */
-            // if (FALSE) {
-            //     if (render.rectified) {
-            //         DRECT pts2 = { left + x, top + yoff - MIN (min, pmin), left + x, top + yoff };
-            //         draw_cairo_line (cr, &pts2, &render.c_fg);
-            //     }
-            //     else {
-            //         DRECT pts2 = { left + x, top + yoff - MAX (pmin, min), left + x, top + yoff - MIN (pmax, max) };
-            //         draw_cairo_line (cr, &pts2, &render.c_fg);
-            //     }
-            // }
-
-            // if (FALSE) {
-            //     if (render.rectified) {
-            //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff };
-            //         draw_cairo_line (cr, &pts2, &render.c_rms);
-            //     }
-            //     else {
-            //         DRECT pts2 = { left + x, top + yoff - MIN (prms, rms), left + x, top + yoff + MIN (prms, rms) };
-            //         draw_cairo_line (cr, &pts2, &render.c_rms);
-            //     }
-            //}
 
             if (CONFIG_RENDER_METHOD == BARS) {
                 pmin = 0;
