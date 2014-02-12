@@ -44,8 +44,9 @@
 #define BARS (1)
 #define SPIKES (2)
 // min, max, rms
-#define VALUES_PER_FRAME (3)
-#define MAX_VALUES_PER_CHANNEL (2048)
+#define VALUES_PER_SAMPLE (3)
+#define MAX_CHANNELS (6)
+//#define MAX_VALUES_PER_CHANNEL (2048)
 
 #define     CONFSTR_WF_LOG_ENABLED       "waveform.log_enabled"
 #define     CONFSTR_WF_MIX_TO_MONO       "waveform.mix_to_mono"
@@ -70,6 +71,7 @@
 
 #define     CONFSTR_WF_MAX_FILE_LENGTH   "waveform.max_file_length"
 #define     CONFSTR_WF_CACHE_ENABLED     "waveform.cache_enabled"
+#define     CONFSTR_WF_NUM_SAMPLES       "waveform.num_samples"
 
 
 /* Global variables */
@@ -88,7 +90,7 @@ typedef struct
     GtkWidget *drawarea;
     guint drawtimer;
     guint resizetimer;
-    float *buffer;
+    short *buffer;
     size_t max_buffer_len;
     size_t buffer_len;
     int channels;
@@ -142,6 +144,7 @@ static guint16  CONFIG_PB_ALPHA;
 static guint16  CONFIG_FG_RMS_ALPHA;
 static gint     CONFIG_RENDER_METHOD = SPIKES;
 static gint     CONFIG_MAX_FILE_LENGTH = 180;
+static gint     CONFIG_NUM_SAMPLES = 2048;
 
 static void
 save_config (void)
@@ -151,6 +154,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_DISPLAY_RMS,         CONFIG_DISPLAY_RMS);
     deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
     deadbeef->conf_set_int (CONFSTR_WF_MAX_FILE_LENGTH,     CONFIG_MAX_FILE_LENGTH);
+    deadbeef->conf_set_int (CONFSTR_WF_NUM_SAMPLES,         CONFIG_NUM_SAMPLES);
     deadbeef->conf_set_int (CONFSTR_WF_CACHE_ENABLED,       CONFIG_CACHE_ENABLED);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,          CONFIG_BG_COLOR.red);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_G,          CONFIG_BG_COLOR.green);
@@ -179,6 +183,7 @@ load_config (void)
     CONFIG_DISPLAY_RMS = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RMS,              TRUE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
+    CONFIG_NUM_SAMPLES = deadbeef->conf_get_int (CONFSTR_WF_NUM_SAMPLES,              2048);
     CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,         FALSE);
 
     CONFIG_BG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,             50000);
@@ -488,7 +493,7 @@ set_colour (COLOUR * c, int h)
 } /* set_colour */
 
 /* copied from ardour3 */
-static inline float
+static inline short
 _log_meter (float power, double lower_db, double upper_db, double non_linearity)
 {
     return (power < lower_db ? 0.0 : pow ((power - lower_db) / (upper_db - lower_db), non_linearity));
@@ -792,19 +797,19 @@ waveform_render (void *user_data)
     cairo_set_line_width (rms_min_cr, BORDER_LINE_WIDTH);
 
     int channels = w->channels;
-    int frames_size = VALUES_PER_FRAME * channels;
-    float frames_per_x;
+    int samples_size = VALUES_PER_SAMPLE * channels;
+    float samples_per_x;
 
     if (channels != 0) {
-        frames_per_x = w->buffer_len / (float)(width * frames_size);
+        samples_per_x = w->buffer_len / (float)(width * samples_size);
         height /= channels;
         top /= channels;
     }
     else {
-        frames_per_x = w->buffer_len / (float)(width * VALUES_PER_FRAME);
+        samples_per_x = w->buffer_len / (float)(width * VALUES_PER_SAMPLE);
     }
-    int max_frames_per_x = 1 + ceilf (frames_per_x);
-    int frames_per_buf = floorf (frames_per_x * (float)(frames_size));
+    int max_samples_per_x = 1 + ceilf (samples_per_x);
+    int samples_per_buf = floorf (samples_per_x * (float)(samples_size));
 
     float x_off;
     if (CONFIG_RENDER_METHOD == BARS) {
@@ -817,16 +822,16 @@ waveform_render (void *user_data)
     }
 
     if (CONFIG_MIX_TO_MONO) {
-        frames_size = VALUES_PER_FRAME;
+        samples_size = VALUES_PER_SAMPLE;
         channels = 1;
-        frames_per_x = w->buffer_len / ((float)width * frames_size);
-        max_frames_per_x = 1 + ceilf (frames_per_x);
-        frames_per_buf = floorf (frames_per_x * (float)(frames_size));
+        samples_per_x = w->buffer_len / ((float)width * samples_size);
+        max_samples_per_x = 1 + ceilf (samples_per_x);
+        samples_per_buf = floorf (samples_per_x * (float)(samples_size));
         height = a.height * 0.9;
         top = (a.height - height)/2;
     }
 
-    int frames_per_buf_temp = frames_per_buf;
+    int samples_per_buf_temp = samples_per_buf;
     int offset;
     int f_offset;
     float min, max, rms;
@@ -837,8 +842,8 @@ waveform_render (void *user_data)
             break;
         }
         f_offset = 0;
-        offset = ch * VALUES_PER_FRAME;
-        frames_per_buf = frames_per_buf_temp;
+        offset = ch * VALUES_PER_SAMPLE;
+        samples_per_buf = samples_per_buf_temp;
 
         if (CONFIG_RENDER_METHOD == SPIKES) {
             cairo_move_to (max_cr, 0, top + height/2);
@@ -848,7 +853,7 @@ waveform_render (void *user_data)
         }
 
         for (int x = 0; x < width; x++) {
-            if (offset + frames_per_buf > w->buffer_len) {
+            if (offset + samples_per_buf > w->buffer_len) {
                 break;
             }
             double yoff;
@@ -861,11 +866,11 @@ waveform_render (void *user_data)
             }
 
             int offset_temp = offset;
-            for (int j = offset; j < offset + frames_per_buf; j = j + frames_size) {
-                max = MAX (max, w->buffer[j]);
-                min = MIN (min, w->buffer[j+1]);
-                rms = (rms + w->buffer[j+2])/2;
-                offset_temp += frames_size;
+            for (int j = offset; j < offset + samples_per_buf; j = j + samples_size) {
+                max = MAX (max, (float)w->buffer[j]/1000);
+                min = MIN (min, (float)w->buffer[j+1]/1000);
+                rms = (rms + (float)w->buffer[j+2]/1000)/2;
+                offset_temp += samples_size;
             }
             offset = offset_temp;
 
@@ -949,10 +954,10 @@ waveform_render (void *user_data)
                 pmax = max;
                 prms = rms;
             }
-            f_offset += frames_per_buf;
-            frames_per_buf = floorf ((x + 1) * frames_per_x * frames_size) - f_offset;
-            frames_per_buf = frames_per_buf > (max_frames_per_x * frames_size) ? (max_frames_per_x * frames_size) : frames_per_buf;
-            frames_per_buf = frames_per_buf + ((frames_size) - (frames_per_buf % frames_size));
+            f_offset += samples_per_buf;
+            samples_per_buf = floorf ((x + 1) * samples_per_x * samples_size) - f_offset;
+            samples_per_buf = samples_per_buf > (max_samples_per_x * samples_size) ? (max_samples_per_x * samples_size) : samples_per_buf;
+            samples_per_buf = samples_per_buf + ((samples_size) - (samples_per_buf % samples_size));
         }
         if (CONFIG_RENDER_METHOD == SPIKES) {
             cairo_line_to (max_cr, a.width, top + height/2);
@@ -990,7 +995,7 @@ waveform_db_cache (gpointer user_data, char const *uri)
     deadbeef->mutex_lock (w->mutex);
     waveform_db_open (cache_path, cache_path_size);
     waveform_db_init (uri);
-    waveform_db_write (uri, w->buffer, w->buffer_len * sizeof(float), w->channels, 0);
+    waveform_db_write (uri, w->buffer, w->buffer_len * sizeof(short), w->channels, 0);
     waveform_db_close ();
     deadbeef->mutex_unlock (w->mutex);
 }
@@ -999,7 +1004,7 @@ gboolean
 waveform_generate_wavedata (gpointer user_data)
 {
     w_waveform_t *w = user_data;
-    double width = MAX_VALUES_PER_CHANNEL;
+    double width = CONFIG_NUM_SAMPLES;
     long buffer_len;
 
     deadbeef->mutex_lock (w->mutex);
@@ -1072,34 +1077,34 @@ waveform_generate_wavedata (gpointer user_data)
             float* buffer;
             if (fileinfo) {
                 w->channels = fileinfo->fmt.channels;
-                int nframes_per_channel = (int)deadbeef->pl_get_item_duration(it) * fileinfo->fmt.samplerate;
-                const long frames_per_buf = floorf((float) nframes_per_channel / (float) width);
-                const long max_frames_per_buf = 1 + frames_per_buf;
+                const int nsamples_per_channel = (int)deadbeef->pl_get_item_duration(it) * fileinfo->fmt.samplerate;
+                const int samples_per_buf = floorf((float) nsamples_per_channel / (float) width);
+                const int max_samples_per_buf = 1 + samples_per_buf;
 
                 deadbeef->mutex_lock (w->mutex);
-                data = malloc (sizeof (float) * max_frames_per_buf * fileinfo->fmt.channels);
+                data = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
                 if (!data) {
                     printf ("out of memory.\n");
                     deadbeef->pl_item_unref (it);
                     deadbeef->mutex_unlock (w->mutex);
                     return FALSE;
                 }
-                memset (data, 0, sizeof (float) * max_frames_per_buf * fileinfo->fmt.channels);
+                memset (data, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
                 deadbeef->mutex_unlock (w->mutex);
 
                 deadbeef->mutex_lock (w->mutex);
-                buffer = malloc (sizeof (float) * max_frames_per_buf * fileinfo->fmt.channels);
+                buffer = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
                 if (!buffer) {
                     printf ("out of memory.\n");
                     deadbeef->pl_item_unref (it);
                     deadbeef->mutex_unlock (w->mutex);
                     return FALSE;
                 }
-                memset (buffer, 0, sizeof (float) * max_frames_per_buf * fileinfo->fmt.channels);
+                memset (buffer, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
                 deadbeef->mutex_unlock (w->mutex);
 
                 int channels = (!CONFIG_MIX_TO_MONO) ? 1 : fileinfo->fmt.channels;
-                buffer_len = frames_per_buf * fileinfo->fmt.channels;
+                buffer_len = samples_per_buf * fileinfo->fmt.channels * sizeof (short);
 
                 ddb_waveformat_t out_fmt = {
                     .bps = 32,
@@ -1130,31 +1135,31 @@ waveform_generate_wavedata (gpointer user_data)
 
                     deadbeef->pcm_convert (&fileinfo->fmt, (char *)buffer, &out_fmt, (char *)data, sz);
 
-                    int frame;
+                    int sample;
                     float min, max, rms;
                     int ch;
 
                     for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
-                        if (counter >= w->max_buffer_len) {
+                        if ((counter + 3) * sizeof (short) > w->max_buffer_len) {
                             break;
                         }
                         min = 1.0; max = -1.0; rms = 0.0;
-                        for (frame = 0; frame < frames_per_buf - ch; frame++) {
-                            if (frame * fileinfo->fmt.channels - ch > buffer_len) {
+                        for (sample = 0; sample < samples_per_buf - ch; sample++) {
+                            if (sample * fileinfo->fmt.channels - ch > buffer_len) {
                                 fprintf (stderr, "index error!\n");
                                 break;
                             }
-                            const float sample_val = data [frame * fileinfo->fmt.channels + ch];
+                            const float sample_val = data [sample * fileinfo->fmt.channels + ch];
                             max = MAX (max, sample_val);
                             min = MIN (min, sample_val);
                             rms += (sample_val * sample_val);
                         }
-                        rms /= frames_per_buf * channels;
+                        rms /= samples_per_buf * channels;
                         rms = sqrt (rms);
                         deadbeef->mutex_lock (w->mutex);
-                        w->buffer[counter] = max;
-                        w->buffer[counter+1] = min;
-                        w->buffer[counter+2] = rms;
+                        w->buffer[counter] = (short)(max*1000);
+                        w->buffer[counter+1] = (short)(min*1000);
+                        w->buffer[counter+2] = (short)(rms*1000);
                         deadbeef->mutex_unlock (w->mutex);
                         counter += 3;
                     }
@@ -1164,8 +1169,12 @@ waveform_generate_wavedata (gpointer user_data)
                     waveform_db_cache (w, fname);
                 }
                 w->read = 1;
-                free (data);
-                free (buffer);
+                if (data) {
+                    free (data);
+                }
+                if (buffer) {
+                    free (buffer);
+                }
             }
         }
         if (dec && fileinfo) {
@@ -1288,6 +1297,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
 {
     w_waveform_t *w = (w_waveform_t *)widget;
     intptr_t tid;
+    int num_samples_temp;
     switch (id) {
     case DB_EV_SONGSTARTED:
         w->read = 0;
@@ -1296,14 +1306,25 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         break;
     case DB_EV_SONGCHANGED:
         deadbeef->mutex_lock (w->mutex);
-        memset (w->buffer, 0, sizeof(float) * w->max_buffer_len);
+        memset (w->buffer, 0, sizeof(short) * w->max_buffer_len);
         deadbeef->mutex_unlock (w->mutex);
         w->buffer_len = 0;
         w->channels = 0;
         g_idle_add (waveform_redraw_cb, w);
         break;
     case DB_EV_CONFIGCHANGED:
+        num_samples_temp = CONFIG_NUM_SAMPLES;
         on_config_changed (ctx);
+        w->max_buffer_len = CONFIG_NUM_SAMPLES * MAX_CHANNELS * VALUES_PER_SAMPLE * sizeof (short);
+        if (num_samples_temp != CONFIG_NUM_SAMPLES) {
+            deadbeef->mutex_lock (w->mutex);
+            if (w->buffer) {
+                free (w->buffer);
+            }
+            w->buffer = malloc (sizeof(short) * w->max_buffer_len);
+            memset (w->buffer, 0, sizeof(short) * w->max_buffer_len);
+            deadbeef->mutex_unlock (w->mutex);
+        }
         g_idle_add (waveform_redraw_cb, w);
         break;
     }
@@ -1316,10 +1337,10 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     w_waveform_t *wf = (w_waveform_t *)w;
     GtkAllocation a;
     gtk_widget_get_allocation (wf->drawarea, &a);
-    wf->max_buffer_len = VALUES_PER_FRAME * sizeof(float) * MAX_VALUES_PER_CHANNEL * 4;
+    wf->max_buffer_len = CONFIG_NUM_SAMPLES * VALUES_PER_SAMPLE * MAX_CHANNELS * sizeof (short);
     deadbeef->mutex_lock (wf->mutex);
-    wf->buffer = malloc (sizeof(float) * wf->max_buffer_len);
-    memset (wf->buffer, 0, sizeof(float) * wf->max_buffer_len);
+    wf->buffer = malloc (sizeof(short) * wf->max_buffer_len);
+    memset (wf->buffer, 0, sizeof(short) * wf->max_buffer_len);
     wf->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
     deadbeef->mutex_unlock (wf->mutex);
     wf->rendering = 0;
@@ -1443,8 +1464,9 @@ waveform_disconnect (void)
 
 static const char settings_dlg[] =
     "property \"Ignore files longer than x minutes "
-                "(-1 scans every file): \"          spinbtn[-1,9999,1] "     CONFSTR_WF_MAX_FILE_LENGTH        " 180 ;\n"
-    "property \"Enable cache (experimental) \"      checkbox "               CONFSTR_WF_CACHE_ENABLED          " 0 ;\n"
+                "(-1 scans every file): \"          spinbtn[-1,9999,1] "        CONFSTR_WF_MAX_FILE_LENGTH    " 180 ;\n"
+    "property \"Enable cache (experimental) \"      checkbox "                  CONFSTR_WF_CACHE_ENABLED        " 0 ;\n"
+    "property \"Number of samples (per channel): \" spinbtn[2048,4092,2048] "   CONFSTR_WF_NUM_SAMPLES       " 2048 ;\n"
 ;
 
 static DB_misc_t plugin = {

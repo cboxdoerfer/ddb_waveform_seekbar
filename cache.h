@@ -19,7 +19,7 @@ void
 waveform_db_init (char const *fname);
 
 int
-waveform_db_read (char const *fname, float *buffer, int buffer_len, int *channels);
+waveform_db_read (char const *fname, short *buffer, int buffer_len, int *channels);
 
 void
-waveform_db_write (char const *fname, float *buffer, int buffer_len, int channels, int compression);
+waveform_db_write (char const *fname, short *buffer, int buffer_len, int channels, int compression);
