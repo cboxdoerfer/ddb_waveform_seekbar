@@ -491,7 +491,7 @@ set_colour (COLOUR * c, int h)
 } /* set_colour */
 
 /* copied from ardour3 */
-static inline short
+static inline float
 _log_meter (float power, double lower_db, double upper_db, double non_linearity)
 {
     return (power < lower_db ? 0.0 : pow ((power - lower_db) / (upper_db - lower_db), non_linearity));
