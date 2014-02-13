@@ -75,7 +75,7 @@ waveform_db_delete (char const *fname)
 }
 
 int
-waveform_db_read (char const *fname, float *buffer, int buffer_len, int *channels)
+waveform_db_read (char const *fname, short *buffer, int buffer_len, int *channels)
 {
     int rc;
     sqlite3_stmt* p = 0;
@@ -97,20 +97,20 @@ waveform_db_read (char const *fname, float *buffer, int buffer_len, int *channel
     }
 
     *channels = sqlite3_column_int (p,0);
-    float *data = (float *)sqlite3_column_blob (p,1);
+    short *data = (short *)sqlite3_column_blob (p,1);
 
     int bytes = sqlite3_column_bytes (p,1);
-    if (bytes > buffer_len * sizeof(float)) {
+    if (bytes > buffer_len * sizeof(short)) {
         bytes = buffer_len;
     }
     memcpy (buffer,data,bytes);
 
     sqlite3_finalize (p);
-    return bytes / sizeof(float);
+    return bytes / sizeof(short);
 }
 
 void
-waveform_db_write (char const *fname, float *buffer, int buffer_len, int channels, int compression)
+waveform_db_write (char const *fname, short *buffer, int buffer_len, int channels, int compression)
 {
     int rc;
     sqlite3_stmt* p = 0;
