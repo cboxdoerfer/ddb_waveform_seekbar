@@ -46,7 +46,7 @@
 // min, max, rms
 #define VALUES_PER_SAMPLE (3)
 #define MAX_CHANNELS (6)
-//#define MAX_VALUES_PER_CHANNEL (2048)
+#define MAX_SAMPLES (4096)
 
 #define     CONFSTR_WF_LOG_ENABLED       "waveform.log_enabled"
 #define     CONFSTR_WF_MIX_TO_MONO       "waveform.mix_to_mono"
@@ -995,7 +995,7 @@ waveform_db_cache (gpointer user_data, char const *uri)
     deadbeef->mutex_lock (w->mutex);
     waveform_db_open (cache_path, cache_path_size);
     waveform_db_init (uri);
-    waveform_db_write (uri, w->buffer, w->buffer_len * sizeof(short), w->channels, 0);
+    waveform_db_write (uri, w->buffer, w->buffer_len * sizeof (short), w->channels, 0);
     waveform_db_close ();
     deadbeef->mutex_unlock (w->mutex);
 }
@@ -1281,7 +1281,7 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
     if (trk) {
         GtkAllocation a;
         gtk_widget_get_allocation (widget, &a);
-        float time = (event->x - a.x) * deadbeef->pl_get_item_duration (trk) / (a.width);
+        float time = event->x * deadbeef->pl_get_item_duration (trk) / (a.width);
         if (time < 0) {
             time = 0;
         }
@@ -1297,7 +1297,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
 {
     w_waveform_t *w = (w_waveform_t *)widget;
     intptr_t tid;
-    int num_samples_temp;
+
     switch (id) {
     case DB_EV_SONGSTARTED:
         w->read = 0;
@@ -1306,25 +1306,14 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         break;
     case DB_EV_SONGCHANGED:
         deadbeef->mutex_lock (w->mutex);
-        memset (w->buffer, 0, sizeof(short) * w->max_buffer_len);
+        memset (w->buffer, 0, sizeof (short) * w->max_buffer_len);
         deadbeef->mutex_unlock (w->mutex);
         w->buffer_len = 0;
         w->channels = 0;
         g_idle_add (waveform_redraw_cb, w);
         break;
     case DB_EV_CONFIGCHANGED:
-        num_samples_temp = CONFIG_NUM_SAMPLES;
         on_config_changed (ctx);
-        w->max_buffer_len = CONFIG_NUM_SAMPLES * MAX_CHANNELS * VALUES_PER_SAMPLE * sizeof (short);
-        if (num_samples_temp != CONFIG_NUM_SAMPLES) {
-            deadbeef->mutex_lock (w->mutex);
-            if (w->buffer) {
-                free (w->buffer);
-            }
-            w->buffer = malloc (sizeof(short) * w->max_buffer_len);
-            memset (w->buffer, 0, sizeof(short) * w->max_buffer_len);
-            deadbeef->mutex_unlock (w->mutex);
-        }
         g_idle_add (waveform_redraw_cb, w);
         break;
     }
@@ -1337,10 +1326,10 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     w_waveform_t *wf = (w_waveform_t *)w;
     GtkAllocation a;
     gtk_widget_get_allocation (wf->drawarea, &a);
-    wf->max_buffer_len = CONFIG_NUM_SAMPLES * VALUES_PER_SAMPLE * MAX_CHANNELS * sizeof (short);
+    wf->max_buffer_len = MAX_SAMPLES * VALUES_PER_SAMPLE * MAX_CHANNELS * sizeof (short);
     deadbeef->mutex_lock (wf->mutex);
-    wf->buffer = malloc (sizeof(short) * wf->max_buffer_len);
-    memset (wf->buffer, 0, sizeof(short) * wf->max_buffer_len);
+    wf->buffer = malloc (sizeof (short) * wf->max_buffer_len);
+    memset (wf->buffer, 0, sizeof (short) * wf->max_buffer_len);
     wf->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
     deadbeef->mutex_unlock (wf->mutex);
     wf->rendering = 0;
@@ -1349,7 +1338,7 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     wf->height = a.height;
     wf->width = a.width;
 
-    cache_path_size = make_cache_dir (cache_path, sizeof(cache_path));
+    cache_path_size = make_cache_dir (cache_path, sizeof (cache_path));
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     if (it) {
