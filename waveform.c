@@ -41,8 +41,6 @@
 
 #define M_PI (3.1415926535897932384626433832795029)
 #define BORDER_LINE_WIDTH   (1.0)
-#define BARS (1)
-#define SPIKES (2)
 // min, max, rms
 #define VALUES_PER_SAMPLE (3)
 #define MAX_CHANNELS (6)
@@ -128,7 +126,7 @@ typedef struct
     double border_width;
 } RENDER;
 
-enum WHAT { PEAK = 1, RMS = 2 };
+enum STYLE { BARS = 1, SPIKES = 2 };
 
 static gboolean CONFIG_LOG_ENABLED = FALSE;
 static gboolean CONFIG_MIX_TO_MONO = FALSE;
@@ -259,7 +257,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     gtk_container_set_border_width (GTK_CONTAINER (vbox01), 12);
 
     color_label = gtk_label_new (NULL);
-    gtk_label_set_markup (GTK_LABEL(color_label),"<b>Colors</b>");
+    gtk_label_set_markup (GTK_LABEL (color_label),"<b>Colors</b>");
     gtk_widget_show (color_label);
 
     color_frame = gtk_frame_new ("Colors");
@@ -311,7 +309,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     gtk_table_attach_defaults ((GtkTable *) color_table, progressbar_color, 3,4,1,2);
 
     style_label = gtk_label_new (NULL);
-    gtk_label_set_markup (GTK_LABEL(style_label),"<b>Style</b>");
+    gtk_label_set_markup (GTK_LABEL (style_label),"<b>Style</b>");
     gtk_widget_show (style_label);
 
     style_frame = gtk_frame_new ("Style");
@@ -351,17 +349,17 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     applybutton1 = gtk_button_new_from_stock ("gtk-apply");
     gtk_widget_show (applybutton1);
     gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), applybutton1, GTK_RESPONSE_APPLY);
-    gtk_widget_set_can_default(applybutton1, TRUE);
+    gtk_widget_set_can_default (applybutton1, TRUE);
 
     cancelbutton1 = gtk_button_new_from_stock ("gtk-cancel");
     gtk_widget_show (cancelbutton1);
     gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), cancelbutton1, GTK_RESPONSE_CANCEL);
-    gtk_widget_set_can_default(cancelbutton1, TRUE);
+    gtk_widget_set_can_default (cancelbutton1, TRUE);
 
     okbutton1 = gtk_button_new_from_stock ("gtk-ok");
     gtk_widget_show (okbutton1);
     gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), okbutton1, GTK_RESPONSE_OK);
-    gtk_widget_set_can_default(okbutton1, TRUE);
+    gtk_widget_set_can_default (okbutton1, TRUE);
 
     gtk_color_button_set_color (GTK_COLOR_BUTTON (background_color), &CONFIG_BG_COLOR);
     gtk_color_button_set_color (GTK_COLOR_BUTTON (foreground_color), &CONFIG_FG_COLOR);
@@ -619,7 +617,7 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
 
     if (a.height != w->height || a.width != w->width) {
         cairo_save (cr);
-        cairo_translate(cr, 0, 0);
+        cairo_translate (cr, 0, 0);
         cairo_scale (cr, width/w->width, a.height/w->height);
         cairo_set_source_surface (cr, w->surf, 0, 0);
         cairo_paint (cr);
@@ -881,7 +879,7 @@ waveform_render (void *user_data)
             }
 
             if (render.logscale) {
-               if (max > 0)
+                if (max > 0)
                     max = alt_log_meter (coefficient_to_dB (max));
                 else
                     max = -alt_log_meter (coefficient_to_dB (-max));
@@ -1045,7 +1043,7 @@ waveform_generate_wavedata (gpointer user_data)
         deadbeef->pl_lock ();
         const char *file_meta = deadbeef->pl_find_meta_raw (it, ":FILETYPE");
         if (file_meta) {
-            if (strcmp(file_meta,"cdda") == 0) {
+            if (strcmp (file_meta,"cdda") == 0) {
                 deadbeef->pl_item_unref (it);
                 deadbeef->pl_unlock ();
                 return FALSE;
@@ -1077,8 +1075,8 @@ waveform_generate_wavedata (gpointer user_data)
             float* buffer;
             if (fileinfo) {
                 w->channels = fileinfo->fmt.channels;
-                const int nsamples_per_channel = (int)deadbeef->pl_get_item_duration(it) * fileinfo->fmt.samplerate;
-                const int samples_per_buf = floorf((float) nsamples_per_channel / (float) width);
+                const int nsamples_per_channel = (int)deadbeef->pl_get_item_duration (it) * fileinfo->fmt.samplerate;
+                const int samples_per_buf = floorf ((float) nsamples_per_channel / (float) width);
                 const int max_samples_per_buf = 1 + samples_per_buf;
 
                 deadbeef->mutex_lock (w->mutex);
@@ -1271,7 +1269,7 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
 {
     w_waveform_t *w = user_data;
     if (event->button == 3) {
-      gtk_menu_popup (GTK_MENU (w->popup), NULL, NULL, NULL, w->drawarea, 0, gtk_get_current_event_time());
+      gtk_menu_popup (GTK_MENU (w->popup), NULL, NULL, NULL, w->drawarea, 0, gtk_get_current_event_time ());
       return TRUE;
     }
     w->seekbar_moving = 0;
