@@ -40,7 +40,8 @@
 #define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
 #define M_PI (3.1415926535897932384626433832795029)
-#define BORDER_LINE_WIDTH   (1.0)
+#define LINE_WIDTH   (1.0)
+#define BORDER_WIDTH (1)
 // min, max, rms
 #define VALUES_PER_SAMPLE (3)
 #define MAX_CHANNELS (6)
@@ -67,6 +68,7 @@
 #define     CONFSTR_WF_FG_RMS_COLOR_B    "waveform.fg_rms_color_b"
 #define     CONFSTR_WF_FG_RMS_ALPHA      "waveform.fg_rms_alpha"
 
+#define     CONFSTR_WF_BORDER_WIDTH   "waveform.border_width"
 #define     CONFSTR_WF_MAX_FILE_LENGTH   "waveform.max_file_length"
 #define     CONFSTR_WF_CACHE_ENABLED     "waveform.cache_enabled"
 #define     CONFSTR_WF_NUM_SAMPLES       "waveform.num_samples"
@@ -121,7 +123,7 @@ typedef struct COLOUR
 
 typedef struct
 {
-    gboolean border, logscale, rectified;
+    gboolean border, rectified;
     COLOUR c_fg, c_rms, c_bg, c_ann, c_bbg, c_cl;
     double border_width;
 } RENDER;
@@ -141,6 +143,7 @@ static guint16  CONFIG_FG_ALPHA;
 static guint16  CONFIG_PB_ALPHA;
 static guint16  CONFIG_FG_RMS_ALPHA;
 static gint     CONFIG_RENDER_METHOD = SPIKES;
+static gint     CONFIG_BORDER_WIDTH = 1;
 static gint     CONFIG_MAX_FILE_LENGTH = 180;
 static gint     CONFIG_NUM_SAMPLES = 2048;
 
@@ -151,6 +154,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_MIX_TO_MONO,         CONFIG_MIX_TO_MONO);
     deadbeef->conf_set_int (CONFSTR_WF_DISPLAY_RMS,         CONFIG_DISPLAY_RMS);
     deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
+    deadbeef->conf_set_int (CONFSTR_WF_BORDER_WIDTH,        CONFIG_BORDER_WIDTH);
     deadbeef->conf_set_int (CONFSTR_WF_MAX_FILE_LENGTH,     CONFIG_MAX_FILE_LENGTH);
     deadbeef->conf_set_int (CONFSTR_WF_NUM_SAMPLES,         CONFIG_NUM_SAMPLES);
     deadbeef->conf_set_int (CONFSTR_WF_CACHE_ENABLED,       CONFIG_CACHE_ENABLED);
@@ -180,6 +184,7 @@ load_config (void)
     CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,             FALSE);
     CONFIG_DISPLAY_RMS = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RMS,              TRUE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
+    CONFIG_BORDER_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_BORDER_WIDTH,                  1);
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
     CONFIG_NUM_SAMPLES = deadbeef->conf_get_int (CONFSTR_WF_NUM_SAMPLES,              2048);
     CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,         FALSE);
@@ -425,63 +430,6 @@ make_cache_dir (char *path, int size)
     return sz;
 }
 
-void
-w_waveform_destroy (ddb_gtkui_widget_t *widget)
-{
-    w_waveform_t *w = (w_waveform_t *)widget;
-    if (w->drawtimer) {
-        g_source_remove (w->drawtimer);
-        w->drawtimer = 0;
-    }
-    if (w->resizetimer) {
-        g_source_remove (w->resizetimer);
-        w->resizetimer = 0;
-    }
-    if (w->surf) {
-        cairo_surface_destroy (w->surf);
-        w->surf = NULL;
-    }
-    if (w->buffer) {
-        free (w->buffer);
-        w->buffer = NULL;
-    }
-    if (w->mutex) {
-        deadbeef->mutex_free (w->mutex);
-        w->mutex = 0;
-    }
-}
-
-void
-waveform_render (void *user_data);
-
-static gboolean
-w_waveform_draw_cb (void *user_data)
-{
-    w_waveform_t *w = user_data;
-    gtk_widget_queue_draw (w->drawarea);
-    return TRUE;
-}
-
-static gboolean
-waveform_redraw_cb (void *user_data)
-{
-    w_waveform_t *w = user_data;
-    waveform_render (w);
-    gtk_widget_queue_draw (w->drawarea);
-    return FALSE;
-}
-
-static gboolean
-waveform_redraw_thread (void *user_data)
-{
-    w_waveform_t *w = user_data;
-    w->resizetimer = 0;
-    intptr_t tid = deadbeef->thread_start_low_priority (waveform_render, w);
-    deadbeef->thread_detach (tid);
-    gtk_widget_queue_draw (w->drawarea);
-    return FALSE;
-}
-
 static inline void
 set_colour (COLOUR * c, int h)
 {   c->a = ((h >> 24) & 0xff) / 255.0;
@@ -522,16 +470,6 @@ inv_log_meter (float power)
 }
 #endif
 
-enum
-{
-    CORNER_NONE        = 0,
-    CORNER_TOPLEFT     = 1,
-    CORNER_TOPRIGHT    = 2,
-    CORNER_BOTTOMLEFT  = 4,
-    CORNER_BOTTOMRIGHT = 8,
-    CORNER_ALL         = 15
-};
-
 void color_contrast (GdkColor * color)
 {
     int d = 0;
@@ -545,6 +483,16 @@ void color_contrast (GdkColor * color)
     color->blue = d;
     color->green = d;
 }
+
+enum
+{
+    CORNER_NONE        = 0,
+    CORNER_TOPLEFT     = 1,
+    CORNER_TOPRIGHT    = 2,
+    CORNER_BOTTOMLEFT  = 4,
+    CORNER_BOTTOMRIGHT = 8,
+    CORNER_ALL         = 15
+};
 
 static void
 clearlooks_rounded_rectangle (cairo_t * cr,
@@ -599,113 +547,150 @@ draw_cairo_line (cairo_t* cr, DRECT *pts, const COLOUR *c)
     cairo_stroke (cr);
 }
 
+void
+w_waveform_destroy (ddb_gtkui_widget_t *widget)
+{
+    w_waveform_t *w = (w_waveform_t *)widget;
+    if (w->drawtimer) {
+        g_source_remove (w->drawtimer);
+        w->drawtimer = 0;
+    }
+    if (w->resizetimer) {
+        g_source_remove (w->resizetimer);
+        w->resizetimer = 0;
+    }
+    if (w->surf) {
+        cairo_surface_destroy (w->surf);
+        w->surf = NULL;
+    }
+    if (w->buffer) {
+        free (w->buffer);
+        w->buffer = NULL;
+    }
+    if (w->mutex) {
+        deadbeef->mutex_free (w->mutex);
+        w->mutex = 0;
+    }
+}
+
+void
+waveform_draw (void *user_data);
+
+static gboolean
+w_waveform_draw_cb (void *user_data)
+{
+    w_waveform_t *w = user_data;
+    gtk_widget_queue_draw (w->drawarea);
+    return TRUE;
+}
+
+static gboolean
+waveform_redraw_cb (void *user_data)
+{
+    w_waveform_t *w = user_data;
+    waveform_draw (w);
+    gtk_widget_queue_draw (w->drawarea);
+    return FALSE;
+}
+
+static gboolean
+waveform_redraw_thread (void *user_data)
+{
+    w_waveform_t *w = user_data;
+    w->resizetimer = 0;
+    intptr_t tid = deadbeef->thread_start_low_priority (waveform_draw, w);
+    deadbeef->thread_detach (tid);
+    gtk_widget_queue_draw (w->drawarea);
+    return FALSE;
+}
+
 gboolean
-waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
+waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
 {
     w_waveform_t *w = user_data;
     GtkAllocation a;
-    gtk_widget_get_allocation (widget, &a);
+    gtk_widget_get_allocation (w->drawarea, &a);
 
     int cursor_width = 3;
-    double width = a.width;
     float pos = 0;
     float seek_pos = 0;
 
-    if (w->rendering == 1) {
-        return FALSE;
-    }
-
-    if (a.height != w->height || a.width != w->width) {
-        cairo_save (cr);
-        cairo_translate (cr, 0, 0);
-        cairo_scale (cr, width/w->width, a.height/w->height);
-        cairo_set_source_surface (cr, w->surf, 0, 0);
-        cairo_paint (cr);
-        cairo_restore (cr);
-    }
-    else {
-        cairo_set_source_surface (cr, w->surf, 0, 0);
-        cairo_paint (cr);
-    }
-
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
-    if (trk) {
-        if (deadbeef->pl_get_item_duration (trk) > 0) {
-            pos = (deadbeef->streamer_get_playpos () * width)/ deadbeef->pl_get_item_duration (trk);
-            cairo_set_source_rgba (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f,CONFIG_PB_ALPHA/65535.f);
-            cairo_rectangle (cr, 0, 0, pos, a.height);
-            cairo_fill (cr);
+    if (trk && deadbeef->pl_get_item_duration (trk) > 0) {
+        pos = (deadbeef->streamer_get_playpos () * width)/ deadbeef->pl_get_item_duration (trk) + left;
+        cairo_set_source_rgba (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f,CONFIG_PB_ALPHA/65535.f);
+        cairo_rectangle (cr, left, top, pos, height);
+        cairo_fill (cr);
+
+        cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
+        cairo_rectangle (cr, pos - cursor_width, top, cursor_width, height);
+        cairo_fill (cr);
+
+        if (w->seekbar_moving && trk && deadbeef->pl_get_item_duration (trk) > 0) {
+            if (w->seekbar_move_x < left) {
+                seek_pos = left;
+            }
+            else if (w->seekbar_move_x > width + left) {
+                seek_pos = width + left;
+            }
+            else {
+                seek_pos = w->seekbar_move_x;
+            }
 
             cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
-            cairo_rectangle (cr, pos - cursor_width, 0, cursor_width, a.height);
+            cairo_rectangle (cr, seek_pos - cursor_width, top, cursor_width, height);
             cairo_fill (cr);
+            if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
+                w->seekbar_move_x_clicked = -1;
+                float time = 0;
+                float dur = deadbeef->pl_get_item_duration (trk);
 
-            if (w->seekbar_moving && trk && deadbeef->pl_get_item_duration (trk) > 0) {
-                if (w->seekbar_move_x < 0) {
-                    seek_pos = 0;
-                }
-                else if (w->seekbar_move_x > width) {
-                    seek_pos = width;
+                if (w->seekbar_moved > 0) {
+                    time = deadbeef->streamer_get_playpos ();
                 }
                 else {
-                    seek_pos = w->seekbar_move_x;
+                    time = w->seekbar_move_x * dur / (width);
                 }
 
-                cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
-                cairo_rectangle (cr, seek_pos - cursor_width, 0, cursor_width, a.height);
+                if (time < 0) {
+                    time = 0;
+                }
+                if (time > dur) {
+                    time = dur;
+                }
+                char s[1000];
+                int hr = time/3600;
+                int mn = (time-hr*3600)/60;
+                int sc = time-hr*3600-mn*60;
+                snprintf (s, sizeof (s), "%02d:%02d:%02d", hr, mn, sc);
+
+                cairo_save (cr);
+                cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
+                cairo_set_font_size (cr, 18);
+
+                cairo_text_extents_t ex;
+                cairo_text_extents (cr, s, &ex);
+
+                int rec_width = ex.width + 10;
+                int rec_height = ex.height + 10;
+                int rec_pos = seek_pos - rec_width;
+                int text_pos = rec_pos + 5;
+
+                if (seek_pos < rec_width) {
+                    rec_pos = 0;
+                    text_pos = rec_pos + 5;
+                }
+
+                uint8_t corners = 0xff;
+
+                clearlooks_rounded_rectangle (cr, rec_pos, (height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
                 cairo_fill (cr);
-                if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
-                    w->seekbar_move_x_clicked = -1;
-                    float time = 0;
-                    float dur = deadbeef->pl_get_item_duration (trk);
-
-                    if (w->seekbar_moved > 0) {
-                        time = deadbeef->streamer_get_playpos ();
-                    }
-                    else {
-                        time = w->seekbar_move_x * dur / (a.width);
-                    }
-
-                    if (time < 0) {
-                        time = 0;
-                    }
-                    if (time > dur) {
-                        time = dur;
-                    }
-                    char s[1000];
-                    int hr = time/3600;
-                    int mn = (time-hr*3600)/60;
-                    int sc = time-hr*3600-mn*60;
-                    snprintf (s, sizeof (s), "%02d:%02d:%02d", hr, mn, sc);
-
-                    cairo_save (cr);
-                    cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
-                    cairo_set_font_size (cr, 18);
-
-                    cairo_text_extents_t ex;
-                    cairo_text_extents (cr, s, &ex);
-
-                    int rec_width = ex.width + 10;
-                    int rec_height = ex.height + 10;
-                    int rec_pos = seek_pos - rec_width;
-                    int text_pos = rec_pos + 5;
-
-                    if (seek_pos < rec_width) {
-                        rec_pos = 0;
-                        text_pos = rec_pos + 5;
-                    }
-
-                    uint8_t corners = 0xff;
-
-                    clearlooks_rounded_rectangle (cr, rec_pos, (a.height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
-                    cairo_fill (cr);
-                    cairo_move_to (cr, text_pos, (a.height + ex.height)/2);
-                    GdkColor color_text = CONFIG_PB_COLOR;
-                    color_contrast (&color_text);
-                    cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
-                    cairo_show_text (cr, s);
-                    cairo_restore (cr);
-                }
+                cairo_move_to (cr, text_pos, (height + ex.height)/2);
+                GdkColor color_text = CONFIG_PB_COLOR;
+                color_contrast (&color_text);
+                cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
+                cairo_show_text (cr, s);
+                cairo_restore (cr);
             }
         }
         else if (deadbeef->is_local_file (deadbeef->pl_find_meta (trk, ":URI")) == 0) {
@@ -715,8 +700,8 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
             cairo_set_font_size (cr, 18);
             cairo_text_extents_t ex;
             cairo_text_extents (cr, text, &ex);
-            int text_x = (a.width - ex.width)/2;
-            int text_y = (a.height + ex.height)/2;
+            int text_x = (width - ex.width)/2;
+            int text_y = (height + ex.height)/2;
             cairo_move_to (cr, text_x, text_y);
             GdkColor color_text = CONFIG_BG_COLOR;
             color_contrast (&color_text);
@@ -733,16 +718,17 @@ waveform_seekbar_render (GtkWidget *widget, cairo_t *cr, gpointer user_data)
 }
 
 void
-waveform_render (void *user_data)
+waveform_draw (void *user_data)
 {
     w_waveform_t *w = user_data;
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
 
-    double width = a.width;
-    double height = a.height * 0.9;
-    double left = 0;
-    double top = (a.height - height)/2;
+    double width = a.width - 2 * CONFIG_BORDER_WIDTH;
+    double height = a.height - 2 * CONFIG_BORDER_WIDTH;
+    double waveform_height = height * 0.9;
+    double left = CONFIG_BORDER_WIDTH;
+    double top = (a.height - waveform_height + CONFIG_BORDER_WIDTH)/2;
     w->width = a.width;
     w->height = a.height;
 
@@ -754,7 +740,6 @@ waveform_render (void *user_data)
     RENDER render =
     {
         /*border*/ FALSE,
-        /*logscale*/ CONFIG_LOG_ENABLED,
         /*rectified*/ FALSE,
         /*foreground*/  { CONFIG_FG_COLOR.red/65535.f,CONFIG_FG_COLOR.green/65535.f,CONFIG_FG_COLOR.blue/65535.f, CONFIG_FG_ALPHA/65535.f },
         /*wave-rms*/    { CONFIG_FG_RMS_COLOR.red/65535.f,CONFIG_FG_RMS_COLOR.green/65535.f,CONFIG_FG_RMS_COLOR.blue/65535.f, CONFIG_FG_RMS_ALPHA/65535.f },
@@ -782,32 +767,17 @@ waveform_render (void *user_data)
     cairo_t *rms_max_cr = cairo_create (w->surf);
     cairo_t *rms_min_cr = cairo_create (w->surf);
 
-    cairo_set_line_width (cr, render.border_width);
-    cairo_rectangle (cr, left, 0, a.width, a.height);
-    cairo_stroke_preserve (cr);
-    cairo_set_source_rgba (cr,CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f,1);
+       // Draw background
+    cairo_rectangle (cr, 0, 0, a.width, a.height);
+    cairo_set_source_rgba (cr, CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f,1);
     cairo_fill (cr);
+    cairo_clip (cr);
 
-    cairo_set_line_width (cr, BORDER_LINE_WIDTH);
-    cairo_set_line_width (max_cr, BORDER_LINE_WIDTH);
-    cairo_set_line_width (min_cr, BORDER_LINE_WIDTH);
-    cairo_set_line_width (rms_max_cr, BORDER_LINE_WIDTH);
-    cairo_set_line_width (rms_min_cr, BORDER_LINE_WIDTH);
-
-    int channels = w->channels;
-    int samples_size = VALUES_PER_SAMPLE * channels;
-    float samples_per_x;
-
-    if (channels != 0) {
-        samples_per_x = w->buffer_len / (float)(width * samples_size);
-        height /= channels;
-        top /= channels;
-    }
-    else {
-        samples_per_x = w->buffer_len / (float)(width * VALUES_PER_SAMPLE);
-    }
-    int max_samples_per_x = 1 + ceilf (samples_per_x);
-    int samples_per_buf = floorf (samples_per_x * (float)(samples_size));
+    cairo_set_line_width (cr, LINE_WIDTH);
+    cairo_set_line_width (max_cr, LINE_WIDTH);
+    cairo_set_line_width (min_cr, LINE_WIDTH);
+    cairo_set_line_width (rms_max_cr, LINE_WIDTH);
+    cairo_set_line_width (rms_min_cr, LINE_WIDTH);
 
     float x_off;
     if (CONFIG_RENDER_METHOD == BARS) {
@@ -819,14 +789,29 @@ waveform_render (void *user_data)
         x_off = 0.5;
     }
 
+    int channels = w->channels;
+    int samples_size = VALUES_PER_SAMPLE * channels;
+    float samples_per_x;
+
+    if (channels != 0) {
+        samples_per_x = w->buffer_len / (float)(width * samples_size);
+        waveform_height /= channels;
+        top /= channels;
+    }
+    else {
+        samples_per_x = w->buffer_len / (float)(width * VALUES_PER_SAMPLE);
+    }
+    int max_samples_per_x = 1 + ceilf (samples_per_x);
+    int samples_per_buf = floorf (samples_per_x * (float)(samples_size));
+
     if (CONFIG_MIX_TO_MONO) {
         samples_size = VALUES_PER_SAMPLE;
         channels = 1;
         samples_per_x = w->buffer_len / ((float)width * samples_size);
         max_samples_per_x = 1 + ceilf (samples_per_x);
         samples_per_buf = floorf (samples_per_x * (float)(samples_size));
-        height = a.height * 0.9;
-        top = (a.height - height)/2;
+        waveform_height = height * 0.9;
+        top = (a.height - waveform_height)/2;
     }
 
     int samples_per_buf_temp = samples_per_buf;
@@ -835,7 +820,7 @@ waveform_render (void *user_data)
     float min, max, rms;
 
     deadbeef->mutex_lock (w->mutex);
-    for (int ch = 0; ch < channels; ch++, top += (a.height / channels)) {
+    for (int ch = 0; ch < channels; ch++, top += (height / channels)) {
         if (w->channels == 0) {
             break;
         }
@@ -844,17 +829,16 @@ waveform_render (void *user_data)
         samples_per_buf = samples_per_buf_temp;
 
         if (CONFIG_RENDER_METHOD == SPIKES) {
-            cairo_move_to (max_cr, 0, top + height/2);
-            cairo_move_to (min_cr, 0, top + height/2);
-            cairo_move_to (rms_max_cr, 0, top + height/2);
-            cairo_move_to (rms_min_cr, 0, top + height/2);
+            cairo_move_to (max_cr, left, top + waveform_height/2);
+            cairo_move_to (min_cr, left, top + waveform_height/2);
+            cairo_move_to (rms_max_cr, left, top + waveform_height/2);
+            cairo_move_to (rms_min_cr, left, top + waveform_height/2);
         }
 
         for (int x = 0; x < width; x++) {
             if (offset + samples_per_buf > w->buffer_len) {
                 break;
             }
-            double yoff;
 
             if (w->read) {
                 min = 1.0; max = -1.0; rms = 0.0;
@@ -878,7 +862,7 @@ waveform_render (void *user_data)
                 rms *= gain;
             }
 
-            if (render.logscale) {
+            if (CONFIG_LOG_ENABLED) {
                 if (max > 0)
                     max = alt_log_meter (coefficient_to_dB (max));
                 else
@@ -892,14 +876,15 @@ waveform_render (void *user_data)
                 rms = alt_log_meter (coefficient_to_dB (rms));
             }
 
+            double yoff;
             if (render.rectified) {
-                yoff = height;
-                min = height * MAX (fabsf (min), fabsf (max));
+                yoff = waveform_height;
+                min = waveform_height * MAX (fabsf (min), fabsf (max));
                 max = 0;
-                rms = height * rms;
+                rms = waveform_height * rms;
             }
             else {
-                yoff = 0.5 * height;
+                yoff = 0.5 * waveform_height;
                 min = min * yoff;
                 max = max * yoff;
                 rms = rms * yoff;
@@ -958,10 +943,10 @@ waveform_render (void *user_data)
             samples_per_buf = samples_per_buf + ((samples_size) - (samples_per_buf % samples_size));
         }
         if (CONFIG_RENDER_METHOD == SPIKES) {
-            cairo_line_to (max_cr, a.width, top + height/2);
-            cairo_line_to (min_cr, a.width, top + height/2);
-            cairo_line_to (rms_max_cr, a.width, top + height/2);
-            cairo_line_to (rms_min_cr, a.width, top + height/2);
+            cairo_line_to (max_cr, a.width, top + waveform_height/2);
+            cairo_line_to (min_cr, a.width, top + waveform_height/2);
+            cairo_line_to (rms_max_cr, a.width, top + waveform_height/2);
+            cairo_line_to (rms_min_cr, a.width, top + waveform_height/2);
             cairo_close_path (max_cr);
             cairo_close_path (min_cr);
             cairo_close_path (rms_max_cr);
@@ -973,7 +958,7 @@ waveform_render (void *user_data)
         }
         // center line
         if (!render.rectified) {
-            DRECT pts = { left, top + (0.5 * height), left + width, top + (0.5 * height) };
+            DRECT pts = { left, top + (0.5 * waveform_height), left + width, top + (0.5 * waveform_height) };
             draw_cairo_line (cr, &pts, &render.c_cl);
         }
     }
@@ -985,6 +970,58 @@ waveform_render (void *user_data)
     cairo_destroy (rms_min_cr);
     return;
 }
+
+void
+waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int height)
+{
+    w_waveform_t *w = user_data;
+
+    if (w->rendering == 1) {
+        return;
+    }
+
+    cairo_save (cr);
+    if (height != w->height || width != w->width) {
+        cairo_translate (cr, x, y);
+        cairo_scale (cr, width/w->width, height/w->height);
+        cairo_set_source_surface (cr, w->surf, x, y);
+        cairo_paint (cr);
+    }
+    else {
+        cairo_set_source_surface (cr, w->surf, x, y);
+        cairo_paint (cr);
+    }
+    cairo_restore (cr);
+}
+
+void
+waveform_border_draw (void *user_data, cairo_t *cr, int x, int y, int width, int height)
+{
+    w_waveform_t *w = user_data;
+    GtkStyle *style = gtk_widget_get_style (w->drawarea);
+    GdkColor border = style->dark[GTK_STATE_NORMAL];
+
+    cairo_save (cr);
+    cairo_set_antialias (cr, CAIRO_ANTIALIAS_NONE);
+    cairo_set_line_width (cr, CONFIG_BORDER_WIDTH);
+    cairo_rectangle (cr, x, y, width, height);
+    cairo_stroke_preserve (cr);
+    cairo_set_source_rgba (cr,border.red/65535.f,border.green/65535.f,border.blue/65535.f,1);
+    cairo_stroke (cr);
+    cairo_restore (cr);
+}
+
+//void
+//waveform_background_draw (void *user_data, cairo_t *cr, int x, int y, int width, int height)
+//{
+//    w_waveform_t *w = (w_waveform_t *)user_data;
+//
+//    cairo_save (cr);
+//    cairo_set_source_rgb (cr, CONFIG_BG_COLOR.red/65535.f, CONFIG_BG_COLOR.green/65535.f, CONFIG_BG_COLOR.blue/65535.f);
+//    cairo_rectangle (cr, x, y, width, height);
+//    cairo_fill (cr);
+//    cairo_restore (cr);
+//}
 
 void
 waveform_db_cache (gpointer user_data, char const *uri)
@@ -1193,7 +1230,7 @@ waveform_get_wavedata (gpointer user_data)
     deadbeef->background_job_increment ();
     w_waveform_t *w = user_data;
     waveform_generate_wavedata (w);
-    waveform_render (w);
+    waveform_draw (w);
     deadbeef->background_job_decrement ();
 }
 
@@ -1224,7 +1261,6 @@ waveform_cached (DB_playItem_t *it)
     deadbeef->pl_lock ();
     if (it) {
         char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
-        //g_message ("%s",uri);
         waveform_db_open (cache_path, cache_path_size);
         waveform_db_init (NULL);
         result = waveform_db_cached (uri);
@@ -1237,14 +1273,23 @@ waveform_cached (DB_playItem_t *it)
     return result;
 }
 
-gboolean
+void
 waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
-    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (widget));
     w_waveform_t *w = user_data;
-    gboolean res = waveform_seekbar_render (widget, cr, w);
+    GtkAllocation a;
+    gtk_widget_get_allocation (widget, &a);
+    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (widget));
+
+    int x = 0;
+    int y = 0;
+    int width = a.width;
+    int height = a.height;
+//    waveform_background_draw (w, cr, x, y, width, height);
+    waveform_scale (w, cr, x, y, width, height);
+    waveform_seekbar_draw (w, cr, x + CONFIG_BORDER_WIDTH, y + CONFIG_BORDER_WIDTH, width - 2 * CONFIG_BORDER_WIDTH, height - 2 * CONFIG_BORDER_WIDTH);
+    waveform_border_draw (w, cr, x + CONFIG_BORDER_WIDTH, y + CONFIG_BORDER_WIDTH, width - CONFIG_BORDER_WIDTH, height - CONFIG_BORDER_WIDTH);
     cairo_destroy (cr);
-    return res;
 }
 
 gboolean
@@ -1282,7 +1327,7 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
     if (w->seekbar_moving) {
         GtkAllocation a;
         gtk_widget_get_allocation (widget, &a);
-        w->seekbar_move_x = event->x;
+        w->seekbar_move_x = event->x + CONFIG_BORDER_WIDTH;
         gtk_widget_queue_draw (widget);
     }
     return TRUE;
@@ -1299,7 +1344,7 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
     w->seekbar_moved = 0.0;
     GtkAllocation a;
     gtk_widget_get_allocation (widget, &a);
-    w->seekbar_move_x = event->x;
+    w->seekbar_move_x = event->x + CONFIG_BORDER_WIDTH;
     w->seekbar_move_x_clicked = event->x;
     return TRUE;
 }
@@ -1319,7 +1364,7 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
     if (trk) {
         GtkAllocation a;
         gtk_widget_get_allocation (widget, &a);
-        float time = event->x * deadbeef->pl_get_item_duration (trk) / (a.width);
+        float time = (event->x + CONFIG_BORDER_WIDTH) * deadbeef->pl_get_item_duration (trk) / (a.width - 2 * CONFIG_BORDER_WIDTH);
         if (time < 0) {
             time = 0;
         }
@@ -1548,6 +1593,7 @@ waveform_get_actions (DB_playItem_t *it)
 
 
 static const char settings_dlg[] =
+    "property \"Border width: \"                    spinbtn[0,1,1] "            CONFSTR_WF_BORDER_WIDTH         " 1 ;\n"
     "property \"Ignore files longer than x minutes "
                 "(-1 scans every file): \"          spinbtn[-1,9999,1] "        CONFSTR_WF_MAX_FILE_LENGTH    " 180 ;\n"
     "property \"Enable cache (experimental) \"      checkbox "                  CONFSTR_WF_CACHE_ENABLED        " 0 ;\n"

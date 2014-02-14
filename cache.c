@@ -1,5 +1,7 @@
 #include "cache.h"
 
+static sqlite3 *db;
+
 void
 waveform_db_open (char* path, int size)
 {

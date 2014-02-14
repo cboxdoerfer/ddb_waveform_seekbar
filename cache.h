@@ -7,8 +7,6 @@
 #include <fcntl.h>
 #include <sqlite3.h>
 //#include "waveform.c"
-static sqlite3 *db;
-
 void
 waveform_db_open ();
 
