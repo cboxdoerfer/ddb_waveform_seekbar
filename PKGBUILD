@@ -1,5 +1,5 @@
 pkgname=deadbeef-plugin-waveform-git
-pkgver=20130221
+pkgver=20130223
 pkgrel=1
 pkgdesc="Waveform Seekbar Plugin for the DeaDBeeF audio player (development version)"
 url="https://github.com/cboxdoerfer/ddb_waveform_seekbar"
