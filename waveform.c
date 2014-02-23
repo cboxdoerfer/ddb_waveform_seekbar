@@ -420,13 +420,41 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     return;
 }
 
-int
+static int
+check_dir (const char *dir, mode_t mode)
+{
+    char *tmp = strdup (dir);
+    char *slash = tmp;
+    struct stat stat_buf;
+    do
+    {
+        slash = strstr (slash+1, "/");
+        if (slash)
+            *slash = 0;
+        if (-1 == stat (tmp, &stat_buf))
+        {
+            if (0 != mkdir (tmp, mode))
+            {
+                free (tmp);
+                return 0;
+            }
+        }
+        if (slash)
+            *slash = '/';
+    } while (slash);
+    free (tmp);
+    return 1;
+}
+
+static int
 make_cache_dir (char *path, int size)
 {
     const char *cache = getenv ("XDG_CACHE_HOME");
     int sz;
     sz = snprintf (path, size, cache ? "%s/deadbeef/waveform/" : "%s/.cache/deadbeef/waveform/", cache ? cache : getenv ("HOME"));
-    mkdir (path, 0700);
+    if (!check_dir (path, 0755)) {
+        return 0;
+    }
     return sz;
 }
 
