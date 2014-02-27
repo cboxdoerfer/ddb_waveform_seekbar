@@ -1,7 +1,7 @@
 /*
     Waveform seekbar plugin for the DeaDBeeF audio player
 
-    Copyright (C) 2013 Christian Boxdörfer <christian.boxdoerfer@posteo.de>
+    Copyright (C) 2014 Christian Boxdörfer <christian.boxdoerfer@posteo.de>
 
     Based on sndfile-tools waveform by Erik de Castro Lopo.
         waveform.c - v1.04
@@ -39,7 +39,7 @@
 
 #define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
-#define M_PI (3.1415926535897932384626433832795029)
+//#define M_PI (3.1415926535897932384626433832795029)
 #define LINE_WIDTH   (1.0)
 #define BORDER_WIDTH (1)
 // min, max, rms
@@ -68,7 +68,7 @@
 #define     CONFSTR_WF_FG_RMS_COLOR_B    "waveform.fg_rms_color_b"
 #define     CONFSTR_WF_FG_RMS_ALPHA      "waveform.fg_rms_alpha"
 
-#define     CONFSTR_WF_BORDER_WIDTH   "waveform.border_width"
+#define     CONFSTR_WF_BORDER_WIDTH      "waveform.border_width"
 #define     CONFSTR_WF_MAX_FILE_LENGTH   "waveform.max_file_length"
 #define     CONFSTR_WF_CACHE_ENABLED     "waveform.cache_enabled"
 #define     CONFSTR_WF_NUM_SAMPLES       "waveform.num_samples"
@@ -193,7 +193,7 @@ load_config (void)
     CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,             FALSE);
     CONFIG_DISPLAY_RMS = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RMS,              TRUE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
-    CONFIG_BORDER_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_BORDER_WIDTH,                  1);
+    CONFIG_BORDER_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_BORDER_WIDTH,               1);
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
     CONFIG_NUM_SAMPLES = deadbeef->conf_get_int (CONFSTR_WF_NUM_SAMPLES,              2048);
     CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,         FALSE);
@@ -837,7 +837,7 @@ waveform_draw (void *user_data)
     cairo_t *rms_max_cr = cairo_create (w->surf);
     cairo_t *rms_min_cr = cairo_create (w->surf);
 
-       // Draw background
+    // Draw background
     draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, a.width, a.height);
 
     cairo_set_line_width (cr, LINE_WIDTH);
@@ -1663,7 +1663,7 @@ static DB_misc_t plugin = {
     .plugin.name            = "Waveform Seekbar",
     .plugin.descr           = "Waveform Seekbar",
     .plugin.copyright       =
-        "Copyright (C) 2013 Christian Boxdörfer <christian.boxdoerfer@posteo.de>\n"
+        "Copyright (C) 2014 Christian Boxdörfer <christian.boxdoerfer@posteo.de>\n"
         "\n"
         "Based on sndfile-tools waveform by Erik de Castro Lopo.\n"
         "\n"
