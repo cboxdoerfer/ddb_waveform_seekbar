@@ -107,6 +107,12 @@ typedef struct
     cairo_surface_t *surf;
 } w_waveform_t;
 
+typedef struct cache_query_s
+{
+    char *fname;
+    struct cache_query_s *next;
+} cache_query_t;
+
 typedef struct DRECT
 {
     double x1, y1;
@@ -129,6 +135,10 @@ typedef struct
 } RENDER;
 
 enum STYLE { BARS = 1, SPIKES = 2 };
+
+static cache_query_t *queue;
+static cache_query_t *queue_tail;
+static uintptr_t mutex;
 
 static gboolean CONFIG_LOG_ENABLED = FALSE;
 static gboolean CONFIG_MIX_TO_MONO = FALSE;
@@ -418,6 +428,48 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     }
     gtk_widget_destroy (waveform_properties);
     return;
+}
+
+void
+queue_add (const char *fname)
+{
+    deadbeef->mutex_lock (mutex);
+    for (cache_query_t *q = queue; q; q = q->next) {
+        if (!strcmp (fname, q->fname)) {
+            // already queued
+            deadbeef->mutex_unlock (mutex);
+            return;
+        }
+    }
+    cache_query_t *q = malloc (sizeof (cache_query_t));
+    memset (q, 0, sizeof (cache_query_t));
+    q->fname = strdup (fname);
+    if (queue_tail) {
+        queue_tail->next = q;
+        queue_tail = q;
+    }
+    else {
+        queue = queue_tail = q;
+    }
+    deadbeef->mutex_unlock (mutex);
+}
+
+void
+queue_pop (void)
+{
+    deadbeef->mutex_lock (mutex);
+    cache_query_t *next = queue ? queue->next : NULL;
+    if (queue) {
+        if (queue->fname) {
+            free (queue->fname);
+        }
+        free (queue);
+    }
+    queue = next;
+    if (!queue) {
+        queue_tail = NULL;
+    }
+    deadbeef->mutex_unlock (mutex);
 }
 
 static int
@@ -1056,18 +1108,15 @@ int
 waveform_valid_track (DB_playItem_t *it, const char *uri)
 {
     if (!deadbeef->is_local_file (uri)) {
-        deadbeef->pl_item_unref (it);
         return 0;
     }
     if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != -1) {
-        deadbeef->pl_item_unref (it);
         return 0;
     }
 
     deadbeef->pl_lock ();
     const char *file_meta = deadbeef->pl_find_meta_raw (it, ":FILETYPE");
     if (file_meta && strcmp (file_meta,"cdda") == 0) {
-        deadbeef->pl_item_unref (it);
         deadbeef->pl_unlock ();
         return 0;
     }
@@ -1157,6 +1206,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 
             int eof = 0;
             int counter = 0;
+            deadbeef->mutex_lock (w->mutex);
             while (!eof) {
                 //ugly hack
                 //buffer_len = buffer_len + ((fileinfo->fmt.channels * 2) -(buffer_len % (fileinfo->fmt.channels * 2)));
@@ -1192,11 +1242,9 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                     }
                     rms /= samples_per_buf * channels;
                     rms = sqrt (rms);
-                    deadbeef->mutex_lock (w->mutex);
                     w->buffer[counter] = (short)(max*1000);
                     w->buffer[counter+1] = (short)(min*1000);
                     w->buffer[counter+2] = (short)(rms*1000);
-                    deadbeef->mutex_unlock (w->mutex);
                     counter += 3;
                 }
             }
@@ -1204,6 +1252,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
             if (CONFIG_CACHE_ENABLED) {
                 waveform_db_cache (w, uri);
             }
+            deadbeef->mutex_unlock (w->mutex);
             w->read = 1;
             if (data) {
                 free (data);
@@ -1222,7 +1271,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 }
 
 int
-waveform_delete (DB_playItem_t *it, const char *uri)
+waveform_delete (const char *uri)
 {
     waveform_db_open (cache_path, cache_path_size);
     waveform_db_init (NULL);
@@ -1232,7 +1281,7 @@ waveform_delete (DB_playItem_t *it, const char *uri)
 }
 
 int
-waveform_cached (DB_playItem_t *it, const char *uri)
+waveform_cached (const char *uri)
 {
     waveform_db_open (cache_path, cache_path_size);
     waveform_db_init (NULL);
@@ -1242,7 +1291,7 @@ waveform_cached (DB_playItem_t *it, const char *uri)
 }
 
 void
-waveform_get_from_cache (gpointer user_data, DB_playItem_t *it, const char *uri)
+waveform_get_from_cache (gpointer user_data, const char *uri)
 {
     w_waveform_t *w = user_data;
     deadbeef->mutex_lock (w->mutex);
@@ -1261,16 +1310,17 @@ waveform_get_wavedata (gpointer user_data)
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     char *uri = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
     if (it && waveform_valid_track (it, uri)) {
-        if (CONFIG_CACHE_ENABLED && waveform_cached (it, uri)) {
-            waveform_get_from_cache (w, it, uri);
+        if (CONFIG_CACHE_ENABLED && waveform_cached (uri)) {
+            waveform_get_from_cache (w, uri);
         }
         else {
             waveform_generate_wavedata (w, it, uri);
         }
-        deadbeef->pl_item_unref (it);
     }
     waveform_draw (w);
-
+    if (it) {
+        deadbeef->pl_item_unref (it);
+    }
     if (uri) {
        free (uri);
     }
@@ -1469,6 +1519,7 @@ w_waveform_create (void)
     w->popup = gtk_menu_new ();
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
+    mutex = deadbeef->mutex_create ();
     gtk_widget_show (w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->drawarea);
     gtk_widget_show (w->popup);
@@ -1550,8 +1601,8 @@ waveform_action_lookup (DB_plugin_action_t *action, int ctx)
             while (it) {
                 if (deadbeef->pl_is_selected (it)) {
                     const char *uri = deadbeef->pl_find_meta_raw (it, ":URI");
-                    if (waveform_cached (it, uri)) {
-                        waveform_delete (it, uri);
+                    if (waveform_cached (uri)) {
+                        waveform_delete (uri);
                     }
                 }
                 DB_playItem_t *next = deadbeef->pl_get_next (it, PL_MAIN);
@@ -1583,7 +1634,7 @@ waveform_get_actions (DB_playItem_t *it)
     lookup_action.flags |= DB_ACTION_DISABLED;
     DB_playItem_t *current = deadbeef->pl_get_first (PL_MAIN);
     while (current) {
-        if (deadbeef->pl_is_selected (current) && waveform_cached (current, deadbeef->pl_find_meta_raw (current, ":URI"))) {
+        if (deadbeef->pl_is_selected (current) && waveform_cached (deadbeef->pl_find_meta_raw (current, ":URI"))) {
             lookup_action.flags &= ~DB_ACTION_DISABLED;
             deadbeef->pl_item_unref (current);
             break;
