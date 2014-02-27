@@ -256,7 +256,8 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     GtkWidget *applybutton1;
     GtkWidget *cancelbutton1;
     GtkWidget *okbutton1;
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     waveform_properties = gtk_dialog_new ();
     gtk_widget_set_size_request (waveform_properties, -1, 350);
     gtk_window_set_title (GTK_WINDOW (waveform_properties), "Waveform Properties");
@@ -426,6 +427,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
         break;
     }
     gtk_widget_destroy (waveform_properties);
+#pragma GCC diagnostic pop
     return;
 }
 
@@ -1060,7 +1062,10 @@ void
 waveform_border_draw (void *user_data, cairo_t *cr, int x, int y, int width, int height)
 {
     w_waveform_t *w = user_data;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     GtkStyle *style = gtk_widget_get_style (w->drawarea);
+#pragma GCC diagnostic pop
     GdkColor border = style->dark[GTK_STATE_NORMAL];
 
     cairo_save (cr);
