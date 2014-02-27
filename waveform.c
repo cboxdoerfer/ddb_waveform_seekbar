@@ -458,14 +458,6 @@ make_cache_dir (char *path, int size)
     return sz;
 }
 
-static inline void
-set_colour (COLOUR * c, int h)
-{   c->a = ((h >> 24) & 0xff) / 255.0;
-    c->r = ((h >> 16) & 0xff) / 255.0;
-    c->g = ((h >> 8) & 0xff) / 255.0;
-    c->b = ((h) & 0xff) / 255.0;
-} /* set_colour */
-
 /* copied from ardour3 */
 static inline float
 _log_meter (float power, double lower_db, double upper_db, double non_linearity)
@@ -575,6 +567,14 @@ draw_cairo_line (cairo_t* cr, DRECT *pts, const COLOUR *c)
     cairo_stroke (cr);
 }
 
+static inline void
+draw_cairo_rectangle (cairo_t *cr, const GdkColor *c, int alpha, float x, int y, float width, int height)
+{
+    cairo_set_source_rgba (cr, c->red/65535.f, c->green/65535.f, c->blue/65535.f, alpha/65535.f);
+    cairo_rectangle (cr, x, y, width, height);
+    cairo_fill (cr);
+}
+
 void
 w_waveform_destroy (ddb_gtkui_widget_t *widget)
 {
@@ -632,7 +632,7 @@ waveform_redraw_thread (void *user_data)
     return FALSE;
 }
 
-gboolean
+void
 waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
 {
     w_waveform_t *w = user_data;
@@ -644,17 +644,13 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
     float seek_pos = 0;
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
-    if (trk && deadbeef->pl_get_item_duration (trk) > 0) {
+    if (trk) {
         pos = (deadbeef->streamer_get_playpos () * width)/ deadbeef->pl_get_item_duration (trk) + left;
-        cairo_set_source_rgba (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f,CONFIG_PB_ALPHA/65535.f);
-        cairo_rectangle (cr, left, top, pos, height);
-        cairo_fill (cr);
 
-        cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
-        cairo_rectangle (cr, pos - cursor_width, top, cursor_width, height);
-        cairo_fill (cr);
+        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, CONFIG_PB_ALPHA, left, top, pos, height);
+        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width, top, cursor_width, height);
 
-        if (w->seekbar_moving && trk && deadbeef->pl_get_item_duration (trk) > 0) {
+        if (w->seekbar_moving && deadbeef->pl_get_item_duration (trk) > 0) {
             if (w->seekbar_move_x < left) {
                 seek_pos = left;
             }
@@ -665,9 +661,8 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
                 seek_pos = w->seekbar_move_x;
             }
 
-            cairo_set_source_rgb (cr,CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f);
-            cairo_rectangle (cr, seek_pos - cursor_width, top, cursor_width, height);
-            cairo_fill (cr);
+            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, seek_pos - cursor_width, top, cursor_width, height);
+
             if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
                 w->seekbar_move_x_clicked = -1;
                 float time = 0;
@@ -721,7 +716,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
                 cairo_restore (cr);
             }
         }
-        else if (deadbeef->is_local_file (deadbeef->pl_find_meta (trk, ":URI")) == 0) {
+        else if (!deadbeef->is_local_file (deadbeef->pl_find_meta_raw (trk, ":URI"))) {
             const char *text = "Streaming...";
             cairo_save (cr);
             cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
@@ -737,12 +732,8 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             cairo_show_text (cr, text);
             cairo_restore (cr);
         }
-    }
-
-    if (trk) {
         deadbeef->pl_item_unref (trk);
     }
-    return TRUE;
 }
 
 void
@@ -796,9 +787,7 @@ waveform_draw (void *user_data)
     cairo_t *rms_min_cr = cairo_create (w->surf);
 
        // Draw background
-    cairo_rectangle (cr, 0, 0, a.width, a.height);
-    cairo_set_source_rgba (cr, CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f,1);
-    cairo_fill (cr);
+    draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, a.width, a.height);
     cairo_clip (cr);
 
     cairo_set_line_width (cr, LINE_WIDTH);
@@ -1052,7 +1041,7 @@ waveform_border_draw (void *user_data, cairo_t *cr, int x, int y, int width, int
 //}
 
 void
-waveform_db_cache (gpointer user_data, char const *uri)
+waveform_db_cache (gpointer user_data, const char *uri)
 {
     w_waveform_t *w = user_data;
     deadbeef->mutex_lock (w->mutex);
@@ -1063,8 +1052,31 @@ waveform_db_cache (gpointer user_data, char const *uri)
     deadbeef->mutex_unlock (w->mutex);
 }
 
+int
+waveform_valid_track (DB_playItem_t *it, const char *uri)
+{
+    if (!deadbeef->is_local_file (uri)) {
+        deadbeef->pl_item_unref (it);
+        return 0;
+    }
+    if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != -1) {
+        deadbeef->pl_item_unref (it);
+        return 0;
+    }
+
+    deadbeef->pl_lock ();
+    const char *file_meta = deadbeef->pl_find_meta_raw (it, ":FILETYPE");
+    if (file_meta && strcmp (file_meta,"cdda") == 0) {
+        deadbeef->pl_item_unref (it);
+        deadbeef->pl_unlock ();
+        return 0;
+    }
+    deadbeef->pl_unlock ();
+    return 1;
+}
+
 gboolean
-waveform_generate_wavedata (gpointer user_data)
+waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *uri)
 {
     w_waveform_t *w = user_data;
     double width = CONFIG_NUM_SAMPLES;
@@ -1075,230 +1087,194 @@ waveform_generate_wavedata (gpointer user_data)
     deadbeef->mutex_unlock (w->mutex);
     w->buffer_len = 0;
 
-    DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     DB_fileinfo_t *fileinfo = NULL;
-    if (it && deadbeef->is_local_file (deadbeef->pl_find_meta (it, ":URI"))) {
-        deadbeef->pl_lock ();
-        char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
-        int len = strlen (uri);
-        char fname[len+1];
-        strcpy (fname, uri);
-        deadbeef->pl_unlock ();
-        gboolean cache_enabled = CONFIG_CACHE_ENABLED;
-        if (cache_enabled) {
-            deadbeef->mutex_lock (w->mutex);
-            waveform_db_open (cache_path, cache_path_size);
-            w->buffer_len = waveform_db_read (fname, w->buffer, w->max_buffer_len, &w->channels);
-            if (w->buffer_len > 0) {
-                w->read = 1;
-                deadbeef->pl_item_unref (it);
-                waveform_db_close ();
-                deadbeef->mutex_unlock (w->mutex);
-                return TRUE;
-            }
-            waveform_db_close ();
-            deadbeef->mutex_unlock (w->mutex);
-        }
-        if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != -1) {
-            deadbeef->pl_item_unref (it);
-            printf ("waveform: file too long.\n");
-            return FALSE;
-        }
 
-        deadbeef->pl_lock ();
-        const char *file_meta = deadbeef->pl_find_meta_raw (it, ":FILETYPE");
-        if (file_meta) {
-            if (strcmp (file_meta,"cdda") == 0) {
-                deadbeef->pl_item_unref (it);
-                deadbeef->pl_unlock ();
+    deadbeef->pl_lock ();
+    const char *dec_meta = deadbeef->pl_find_meta_raw (it, ":DECODER");
+    char decoder_id[100];
+    if (dec_meta) {
+        strncpy (decoder_id, dec_meta, sizeof (decoder_id));
+    }
+    DB_decoder_t *dec = NULL;
+    DB_decoder_t **decoders = deadbeef->plug_get_decoder_list ();
+    for (int i = 0; decoders[i]; i++) {
+        if (!strcmp (decoders[i]->plugin.id, decoder_id)) {
+            dec = decoders[i];
+            break;
+        }
+    }
+    deadbeef->pl_unlock ();
+    if (dec) {
+        fileinfo = dec->open (0);
+        if (fileinfo && dec->init (fileinfo, DB_PLAYITEM (it)) != 0) {
+            deadbeef->pl_lock ();
+            fprintf (stderr, "waveform: failed to decode file %s\n", deadbeef->pl_find_meta (it, ":URI"));
+            deadbeef->pl_unlock ();
+        }
+        float *data;
+        float *buffer;
+        if (fileinfo) {
+            w->channels = fileinfo->fmt.channels;
+            const int nsamples_per_channel = (int)deadbeef->pl_get_item_duration (it) * fileinfo->fmt.samplerate;
+            const int samples_per_buf = floorf ((float) nsamples_per_channel / (float) width);
+            const int max_samples_per_buf = 1 + samples_per_buf;
+
+            deadbeef->mutex_lock (w->mutex);
+            data = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            if (!data) {
+                printf ("out of memory.\n");
+                deadbeef->mutex_unlock (w->mutex);
                 return FALSE;
             }
-        }
+            memset (data, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            deadbeef->mutex_unlock (w->mutex);
 
-        const char *dec_meta = deadbeef->pl_find_meta_raw (it, ":DECODER");
-        char decoder_id[100];
-        if (dec_meta) {
-            strncpy (decoder_id, dec_meta, sizeof (decoder_id));
-        }
-        DB_decoder_t *dec = NULL;
-        DB_decoder_t **decoders = deadbeef->plug_get_decoder_list ();
-        for (int i = 0; decoders[i]; i++) {
-            if (!strcmp (decoders[i]->plugin.id, decoder_id)) {
-                dec = decoders[i];
-                break;
-            }
-        }
-        deadbeef->pl_unlock ();
-        if (dec) {
-            fileinfo = dec->open (0);
-            if (fileinfo && dec->init (fileinfo, DB_PLAYITEM (it)) != 0) {
-                deadbeef->pl_lock ();
-                fprintf (stderr, "waveform: failed to decode file %s\n", deadbeef->pl_find_meta (it, ":URI"));
-                deadbeef->pl_unlock ();
-            }
-            float* data;
-            float* buffer;
-            if (fileinfo) {
-                w->channels = fileinfo->fmt.channels;
-                const int nsamples_per_channel = (int)deadbeef->pl_get_item_duration (it) * fileinfo->fmt.samplerate;
-                const int samples_per_buf = floorf ((float) nsamples_per_channel / (float) width);
-                const int max_samples_per_buf = 1 + samples_per_buf;
-
-                deadbeef->mutex_lock (w->mutex);
-                data = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
-                if (!data) {
-                    printf ("out of memory.\n");
-                    deadbeef->pl_item_unref (it);
-                    deadbeef->mutex_unlock (w->mutex);
-                    return FALSE;
-                }
-                memset (data, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            deadbeef->mutex_lock (w->mutex);
+            buffer = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            if (!buffer) {
+                printf ("out of memory.\n");
                 deadbeef->mutex_unlock (w->mutex);
+                return FALSE;
+            }
+            memset (buffer, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            deadbeef->mutex_unlock (w->mutex);
 
-                deadbeef->mutex_lock (w->mutex);
-                buffer = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
-                if (!buffer) {
-                    printf ("out of memory.\n");
-                    deadbeef->pl_item_unref (it);
-                    deadbeef->mutex_unlock (w->mutex);
-                    return FALSE;
+            int channels = (!CONFIG_MIX_TO_MONO) ? 1 : fileinfo->fmt.channels;
+            buffer_len = samples_per_buf * fileinfo->fmt.channels * sizeof (short);
+
+            ddb_waveformat_t out_fmt = {
+                .bps = 32,
+                .channels = fileinfo->fmt.channels,
+                .samplerate = fileinfo->fmt.samplerate,
+                .channelmask = fileinfo->fmt.channelmask,
+                .is_float = 1,
+                .is_bigendian = 0
+            };
+
+            if (buffer_len % (2*fileinfo->fmt.channels) != 0) {
+                buffer_len -= fileinfo->fmt.channels;
+            }
+
+            int eof = 0;
+            int counter = 0;
+            while (!eof) {
+                //ugly hack
+                //buffer_len = buffer_len + ((fileinfo->fmt.channels * 2) -(buffer_len % (fileinfo->fmt.channels * 2)));
+
+                int sz = dec->read (fileinfo, (char *)buffer, buffer_len);
+                if (sz != buffer_len) {
+                    eof = 1;
                 }
-                memset (buffer, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
-                deadbeef->mutex_unlock (w->mutex);
-
-                int channels = (!CONFIG_MIX_TO_MONO) ? 1 : fileinfo->fmt.channels;
-                buffer_len = samples_per_buf * fileinfo->fmt.channels * sizeof (short);
-
-                ddb_waveformat_t out_fmt = {
-                    .bps = 32,
-                    .channels = fileinfo->fmt.channels,
-                    .samplerate = fileinfo->fmt.samplerate,
-                    .channelmask = fileinfo->fmt.channelmask,
-                    .is_float = 1,
-                    .is_bigendian = 0
-                };
-
-                if (buffer_len % (2*fileinfo->fmt.channels) != 0) {
-                    buffer_len -= fileinfo->fmt.channels;
+                else if (sz == 0) {
+                    break;
                 }
 
-                int eof = 0;
-                int counter = 0;
-                while (!eof) {
-                    //ugly hack
-                    //buffer_len = buffer_len + ((fileinfo->fmt.channels * 2) -(buffer_len % (fileinfo->fmt.channels * 2)));
+                deadbeef->pcm_convert (&fileinfo->fmt, (char *)buffer, &out_fmt, (char *)data, sz);
 
-                    int sz = dec->read (fileinfo, (char *)buffer, buffer_len);
-                    if (sz != buffer_len) {
-                        eof = 1;
-                    }
-                    else if (sz == 0) {
+                int sample;
+                float min, max, rms;
+                int ch;
+
+                for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
+                    if ((counter + 3) * sizeof (short) > w->max_buffer_len) {
                         break;
                     }
-
-                    deadbeef->pcm_convert (&fileinfo->fmt, (char *)buffer, &out_fmt, (char *)data, sz);
-
-                    int sample;
-                    float min, max, rms;
-                    int ch;
-
-                    for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
-                        if ((counter + 3) * sizeof (short) > w->max_buffer_len) {
+                    min = 1.0; max = -1.0; rms = 0.0;
+                    for (sample = 0; sample < samples_per_buf - ch; sample++) {
+                        if (sample * fileinfo->fmt.channels - ch > buffer_len) {
+                            fprintf (stderr, "index error!\n");
                             break;
                         }
-                        min = 1.0; max = -1.0; rms = 0.0;
-                        for (sample = 0; sample < samples_per_buf - ch; sample++) {
-                            if (sample * fileinfo->fmt.channels - ch > buffer_len) {
-                                fprintf (stderr, "index error!\n");
-                                break;
-                            }
-                            const float sample_val = data [sample * fileinfo->fmt.channels + ch];
-                            max = MAX (max, sample_val);
-                            min = MIN (min, sample_val);
-                            rms += (sample_val * sample_val);
-                        }
-                        rms /= samples_per_buf * channels;
-                        rms = sqrt (rms);
-                        deadbeef->mutex_lock (w->mutex);
-                        w->buffer[counter] = (short)(max*1000);
-                        w->buffer[counter+1] = (short)(min*1000);
-                        w->buffer[counter+2] = (short)(rms*1000);
-                        deadbeef->mutex_unlock (w->mutex);
-                        counter += 3;
+                        const float sample_val = data [sample * fileinfo->fmt.channels + ch];
+                        max = MAX (max, sample_val);
+                        min = MIN (min, sample_val);
+                        rms += (sample_val * sample_val);
                     }
-                }
-                w->buffer_len = counter;
-                if (cache_enabled) {
-                    waveform_db_cache (w, fname);
-                }
-                w->read = 1;
-                if (data) {
-                    free (data);
-                }
-                if (buffer) {
-                    free (buffer);
+                    rms /= samples_per_buf * channels;
+                    rms = sqrt (rms);
+                    deadbeef->mutex_lock (w->mutex);
+                    w->buffer[counter] = (short)(max*1000);
+                    w->buffer[counter+1] = (short)(min*1000);
+                    w->buffer[counter+2] = (short)(rms*1000);
+                    deadbeef->mutex_unlock (w->mutex);
+                    counter += 3;
                 }
             }
+            w->buffer_len = counter;
+            if (CONFIG_CACHE_ENABLED) {
+                waveform_db_cache (w, uri);
+            }
+            w->read = 1;
+            if (data) {
+                free (data);
+            }
+            if (buffer) {
+                free (buffer);
+            }
         }
-        if (dec && fileinfo) {
-            dec->free (fileinfo);
-            fileinfo = NULL;
-        }
+    }
+    if (dec && fileinfo) {
+        dec->free (fileinfo);
+        fileinfo = NULL;
     }
 
-    if (it) {
-        deadbeef->pl_item_unref (it);
-    }
     return TRUE;
+}
+
+int
+waveform_delete (DB_playItem_t *it, const char *uri)
+{
+    waveform_db_open (cache_path, cache_path_size);
+    waveform_db_init (NULL);
+    int result = waveform_db_delete (uri);
+    waveform_db_close ();
+    return result;
+}
+
+int
+waveform_cached (DB_playItem_t *it, const char *uri)
+{
+    waveform_db_open (cache_path, cache_path_size);
+    waveform_db_init (NULL);
+    int result = waveform_db_cached (uri);
+    waveform_db_close ();
+    return result;
+}
+
+void
+waveform_get_from_cache (gpointer user_data, DB_playItem_t *it, const char *uri)
+{
+    w_waveform_t *w = user_data;
+    deadbeef->mutex_lock (w->mutex);
+    waveform_db_open (cache_path, cache_path_size);
+    w->buffer_len = waveform_db_read (uri, w->buffer, w->max_buffer_len, &w->channels);
+    w->read = 1;
+    waveform_db_close ();
+    deadbeef->mutex_unlock (w->mutex);
 }
 
 void
 waveform_get_wavedata (gpointer user_data)
 {
-    deadbeef->background_job_increment ();
     w_waveform_t *w = user_data;
-    waveform_generate_wavedata (w);
+    deadbeef->background_job_increment ();
+    DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
+    char *uri = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
+    if (it && waveform_valid_track (it, uri)) {
+        if (CONFIG_CACHE_ENABLED && waveform_cached (it, uri)) {
+            waveform_get_from_cache (w, it, uri);
+        }
+        else {
+            waveform_generate_wavedata (w, it, uri);
+        }
+        deadbeef->pl_item_unref (it);
+    }
     waveform_draw (w);
+
+    if (uri) {
+       free (uri);
+    }
     deadbeef->background_job_decrement ();
-}
-
-int
-waveform_delete (DB_playItem_t *it)
-{
-    int result;
-    deadbeef->pl_lock ();
-    if (it) {
-        char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
-        //g_message ("%s",uri);
-        waveform_db_open (cache_path, cache_path_size);
-        waveform_db_init (NULL);
-        result = waveform_db_delete (uri);
-        waveform_db_close ();
-    }
-    else {
-        result = -1;
-    }
-    deadbeef->pl_unlock ();
-    return result;
-}
-
-int
-waveform_cached (DB_playItem_t *it)
-{
-    int result;
-    deadbeef->pl_lock ();
-    if (it) {
-        char const *uri = deadbeef->pl_find_meta_raw (it, ":URI");
-        waveform_db_open (cache_path, cache_path_size);
-        waveform_db_init (NULL);
-        result = waveform_db_cached (uri);
-        waveform_db_close ();
-    }
-    else {
-        result = -1;
-    }
-    deadbeef->pl_unlock ();
-    return result;
 }
 
 void
@@ -1573,8 +1549,9 @@ waveform_action_lookup (DB_plugin_action_t *action, int ctx)
             it = deadbeef->plt_get_first (plt, PL_MAIN);
             while (it) {
                 if (deadbeef->pl_is_selected (it)) {
-                    if (waveform_cached (it)) {
-                        waveform_delete (it);
+                    const char *uri = deadbeef->pl_find_meta_raw (it, ":URI");
+                    if (waveform_cached (it, uri)) {
+                        waveform_delete (it, uri);
                     }
                 }
                 DB_playItem_t *next = deadbeef->pl_get_next (it, PL_MAIN);
@@ -1606,7 +1583,7 @@ waveform_get_actions (DB_playItem_t *it)
     lookup_action.flags |= DB_ACTION_DISABLED;
     DB_playItem_t *current = deadbeef->pl_get_first (PL_MAIN);
     while (current) {
-        if (deadbeef->pl_is_selected (current) && waveform_cached (current)) {
+        if (deadbeef->pl_is_selected (current) && waveform_cached (current, deadbeef->pl_find_meta_raw (current, ":URI"))) {
             lookup_action.flags &= ~DB_ACTION_DISABLED;
             deadbeef->pl_item_unref (current);
             break;
