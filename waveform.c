@@ -1073,18 +1073,6 @@ waveform_border_draw (void *user_data, cairo_t *cr, int x, int y, int width, int
     cairo_restore (cr);
 }
 
-//void
-//waveform_background_draw (void *user_data, cairo_t *cr, int x, int y, int width, int height)
-//{
-//    w_waveform_t *w = (w_waveform_t *)user_data;
-//
-//    cairo_save (cr);
-//    cairo_set_source_rgb (cr, CONFIG_BG_COLOR.red/65535.f, CONFIG_BG_COLOR.green/65535.f, CONFIG_BG_COLOR.blue/65535.f);
-//    cairo_rectangle (cr, x, y, width, height);
-//    cairo_fill (cr);
-//    cairo_restore (cr);
-//}
-
 void
 waveform_db_cache (gpointer user_data, const char *uri)
 {
@@ -1201,9 +1189,6 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
             int counter = 0;
             deadbeef->mutex_lock (w->mutex);
             while (!eof) {
-                //ugly hack
-                //buffer_len = buffer_len + ((fileinfo->fmt.channels * 2) -(buffer_len % (fileinfo->fmt.channels * 2)));
-
                 int sz = dec->read (fileinfo, (char *)buffer, buffer_len);
                 if (sz != buffer_len) {
                     eof = 1;
