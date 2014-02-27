@@ -95,7 +95,6 @@ typedef struct
     size_t buffer_len;
     int channels;
     int read;
-    int rendering;
     int nsamples;
     int seekbar_moving;
     float seekbar_moved;
@@ -821,7 +820,7 @@ waveform_draw (void *user_data)
         /*border-width*/ 2.0f,
     };
 
-    w->rendering = 1;
+    deadbeef->mutex_lock (w->mutex);
     if (cairo_image_surface_get_width (w->surf) != a.width || cairo_image_surface_get_height (w->surf) != a.height) {
         if (w->surf) {
             cairo_surface_destroy (w->surf);
@@ -829,7 +828,7 @@ waveform_draw (void *user_data)
         }
         w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
     }
-    w->rendering = 0;
+    deadbeef->mutex_unlock (w->mutex);
 
     cairo_surface_flush (w->surf);
     cairo_t *cr = cairo_create (w->surf);
@@ -1041,10 +1040,7 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
 {
     w_waveform_t *w = user_data;
 
-    if (w->rendering == 1) {
-        return;
-    }
-
+    deadbeef->mutex_lock (w->mutex);
     cairo_save (cr);
     if (height != w->height || width != w->width) {
         cairo_translate (cr, x, y);
@@ -1057,6 +1053,7 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
         cairo_paint (cr);
     }
     cairo_restore (cr);
+    deadbeef->mutex_unlock (w->mutex);
 }
 
 void
@@ -1465,7 +1462,6 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     memset (wf->buffer, 0, sizeof (short) * wf->max_buffer_len);
     wf->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
     deadbeef->mutex_unlock (wf->mutex);
-    wf->rendering = 0;
     wf->seekbar_moving = 0;
     wf->seekbar_moved = 0;
     wf->height = a.height;
