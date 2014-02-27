@@ -840,7 +840,6 @@ waveform_draw (void *user_data)
 
        // Draw background
     draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, a.width, a.height);
-    cairo_clip (cr);
 
     cairo_set_line_width (cr, LINE_WIDTH);
     cairo_set_line_width (max_cr, LINE_WIDTH);
