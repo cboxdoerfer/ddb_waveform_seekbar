@@ -761,7 +761,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
 
                 clearlooks_rounded_rectangle (cr, rec_pos, (height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
                 cairo_fill (cr);
-                cairo_move_to (cr, text_pos, (height + ex.height)/2);
+                cairo_move_to (cr, text_pos, (a.height + ex.height - 3)/2);
                 GdkColor color_text = CONFIG_PB_COLOR;
                 color_contrast (&color_text);
                 cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
@@ -777,7 +777,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             cairo_text_extents_t ex;
             cairo_text_extents (cr, text, &ex);
             int text_x = (width - ex.width)/2;
-            int text_y = (height + ex.height)/2;
+            int text_y = (a.height + ex.height - 3)/2;
             cairo_move_to (cr, text_x, text_y);
             GdkColor color_text = CONFIG_BG_COLOR;
             color_contrast (&color_text);
