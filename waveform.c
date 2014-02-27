@@ -545,16 +545,15 @@ inv_log_meter (float power)
 
 void color_contrast (GdkColor * color)
 {
-    int d = 0;
     // Counting the perceptive luminance - human eye favors green color...
-    double a = 1 - ( 0.299 * color->red + 0.587 * color->green + 0.114 * color->blue)/65535;
-    if (a < 0.5)
-        d = 0; // bright colors - black font
+    int a = 65535 - ( 2 * color->red + 3 * color->green + color->blue) / 6;
+    if (a < 32768)
+        a = 0; // bright colors - black font
     else
-        d = 65535; // dark colors - white font
-    color->red = d;
-    color->blue = d;
-    color->green = d;
+        a = 65535; // dark colors - white font
+    color->red = a;
+    color->blue = a;
+    color->green = a;
 }
 
 enum
@@ -698,12 +697,13 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
-        pos = (deadbeef->streamer_get_playpos () * width)/ deadbeef->pl_get_item_duration (trk) + left;
+        float dur = deadbeef->pl_get_item_duration (trk);
+        pos = (deadbeef->streamer_get_playpos () * width)/ dur + left;
 
         draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, CONFIG_PB_ALPHA, left, top, pos, height);
         draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width, top, cursor_width, height);
 
-        if (w->seekbar_moving && deadbeef->pl_get_item_duration (trk) > 0) {
+        if (w->seekbar_moving && dur > 0) {
             if (w->seekbar_move_x < left) {
                 seek_pos = left;
             }
@@ -719,7 +719,6 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
                 w->seekbar_move_x_clicked = -1;
                 float time = 0;
-                float dur = deadbeef->pl_get_item_duration (trk);
 
                 if (w->seekbar_moved > 0) {
                     time = deadbeef->streamer_get_playpos ();
