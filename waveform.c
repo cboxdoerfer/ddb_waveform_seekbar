@@ -896,11 +896,12 @@ waveform_draw (void *user_data)
         offset = ch * VALUES_PER_SAMPLE;
         samples_per_buf = samples_per_buf_temp;
 
+        double center = floor (top + waveform_height/2 + 0.5);
         if (CONFIG_RENDER_METHOD == SPIKES) {
-            cairo_move_to (max_cr, left, top + waveform_height/2);
-            cairo_move_to (min_cr, left, top + waveform_height/2);
-            cairo_move_to (rms_max_cr, left, top + waveform_height/2);
-            cairo_move_to (rms_min_cr, left, top + waveform_height/2);
+            cairo_move_to (max_cr, left, center);
+            cairo_move_to (min_cr, left, center);
+            cairo_move_to (rms_max_cr, left, center);
+            cairo_move_to (rms_min_cr, left, center);
         }
 
         for (int x = 0; x < width; x++) {
@@ -1011,10 +1012,11 @@ waveform_draw (void *user_data)
             samples_per_buf = samples_per_buf + ((samples_size) - (samples_per_buf % samples_size));
         }
         if (CONFIG_RENDER_METHOD == SPIKES) {
-            cairo_line_to (max_cr, a.width, top + waveform_height/2);
-            cairo_line_to (min_cr, a.width, top + waveform_height/2);
-            cairo_line_to (rms_max_cr, a.width, top + waveform_height/2);
-            cairo_line_to (rms_min_cr, a.width, top + waveform_height/2);
+            double right = floor (left + width + 0.5);
+            cairo_line_to (max_cr, right, center);
+            cairo_line_to (min_cr, right, center);
+            cairo_line_to (rms_min_cr, right, center);
+            cairo_line_to (rms_max_cr, right, center);
             cairo_close_path (max_cr);
             cairo_close_path (min_cr);
             cairo_close_path (rms_max_cr);
@@ -1023,11 +1025,6 @@ waveform_draw (void *user_data)
             cairo_fill (min_cr);
             cairo_fill (rms_max_cr);
             cairo_fill (rms_min_cr);
-        }
-        // center line
-        if (!render.rectified) {
-            DRECT pts = { left, top + (0.5 * waveform_height), left + width, top + (0.5 * waveform_height) };
-            draw_cairo_line (cr, &pts, &render.c_cl);
         }
     }
     deadbeef->mutex_unlock (w->mutex);
