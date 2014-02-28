@@ -103,6 +103,7 @@ typedef struct
     float height;
     float width;
     intptr_t mutex;
+    intptr_t mutex_rendering;
     cairo_surface_t *surf;
 } w_waveform_t;
 
@@ -651,6 +652,14 @@ w_waveform_destroy (ddb_gtkui_widget_t *widget)
         deadbeef->mutex_free (w->mutex);
         w->mutex = 0;
     }
+    if (w->mutex_rendering) {
+        deadbeef->mutex_free (w->mutex_rendering);
+        w->mutex_rendering = 0;
+    }
+    if (mutex) {
+        deadbeef->mutex_free (mutex);
+        mutex = 0;
+    }
 }
 
 void
@@ -821,7 +830,7 @@ waveform_draw (void *user_data)
         /*border-width*/ 2.0f,
     };
 
-    deadbeef->mutex_lock (w->mutex);
+    deadbeef->mutex_lock (w->mutex_rendering);
     if (cairo_image_surface_get_width (w->surf) != a.width || cairo_image_surface_get_height (w->surf) != a.height) {
         if (w->surf) {
             cairo_surface_destroy (w->surf);
@@ -829,7 +838,7 @@ waveform_draw (void *user_data)
         }
         w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
     }
-    deadbeef->mutex_unlock (w->mutex);
+    deadbeef->mutex_unlock (w->mutex_rendering);
 
     cairo_surface_flush (w->surf);
     cairo_t *cr = cairo_create (w->surf);
@@ -887,7 +896,6 @@ waveform_draw (void *user_data)
     int f_offset;
     float min, max, rms;
 
-    deadbeef->mutex_lock (w->mutex);
     for (int ch = 0; ch < channels; ch++, top += (height / channels)) {
         if (w->channels == 0) {
             break;
@@ -1027,7 +1035,6 @@ waveform_draw (void *user_data)
             cairo_fill (rms_min_cr);
         }
     }
-    deadbeef->mutex_unlock (w->mutex);
     cairo_destroy (cr);
     cairo_destroy (max_cr);
     cairo_destroy (min_cr);
@@ -1041,7 +1048,7 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
 {
     w_waveform_t *w = user_data;
 
-    deadbeef->mutex_lock (w->mutex);
+    deadbeef->mutex_lock (w->mutex_rendering);
     cairo_save (cr);
     if (height != w->height || width != w->width) {
         cairo_translate (cr, x, y);
@@ -1054,7 +1061,7 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
         cairo_paint (cr);
     }
     cairo_restore (cr);
-    deadbeef->mutex_unlock (w->mutex);
+    deadbeef->mutex_unlock (w->mutex_rendering);
 }
 
 void
@@ -1153,25 +1160,19 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
             const int samples_per_buf = floorf ((float) nsamples_per_channel / (float) width);
             const int max_samples_per_buf = 1 + samples_per_buf;
 
-            deadbeef->mutex_lock (w->mutex);
             data = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
             if (!data) {
                 printf ("out of memory.\n");
-                deadbeef->mutex_unlock (w->mutex);
                 return FALSE;
             }
             memset (data, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
-            deadbeef->mutex_unlock (w->mutex);
 
-            deadbeef->mutex_lock (w->mutex);
             buffer = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
             if (!buffer) {
                 printf ("out of memory.\n");
-                deadbeef->mutex_unlock (w->mutex);
                 return FALSE;
             }
             memset (buffer, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
-            deadbeef->mutex_unlock (w->mutex);
 
             int channels = (!CONFIG_MIX_TO_MONO) ? 1 : fileinfo->fmt.channels;
             buffer_len = samples_per_buf * fileinfo->fmt.channels * sizeof (short);
@@ -1500,6 +1501,7 @@ w_waveform_create (void)
     w->popup = gtk_menu_new ();
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
+    w->mutex_rendering = deadbeef->mutex_create ();
     mutex = deadbeef->mutex_create ();
     gtk_widget_show (w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->drawarea);
