@@ -1,5 +1,5 @@
 pkgname=deadbeef-plugin-waveform-git
-pkgver=20130223
+pkgver=20130228
 pkgrel=1
 pkgdesc="Waveform Seekbar Plugin for the DeaDBeeF audio player (development version)"
 url="https://github.com/cboxdoerfer/ddb_waveform_seekbar"
@@ -18,7 +18,7 @@ build() {
 
   if [ -d $_gitname ]; then
     cd $_gitname
-    git pull origin
+    git pull origin master
   else
     git clone $_gitroot
   fi
