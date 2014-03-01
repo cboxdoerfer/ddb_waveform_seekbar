@@ -1645,7 +1645,7 @@ static DB_misc_t plugin = {
     .plugin.api_vmajor      = 1,
     .plugin.api_vminor      = 5,
     .plugin.version_major   = 0,
-    .plugin.version_minor   = 1,
+    .plugin.version_minor   = 2,
 #if GTK_CHECK_VERSION(3,0,0)
     .plugin.id              = "waveform_seekbar-gtk3",
 #else
