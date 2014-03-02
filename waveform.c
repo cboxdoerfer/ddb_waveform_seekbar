@@ -440,6 +440,7 @@ gtk_widget_get_allocation (GtkWidget *widget, GtkAllocation *allocation) {
     (allocation)->width = widget->allocation.width;
     (allocation)->height = widget->allocation.height;
 }
+#define gtk_widget_set_can_default(widget, candefault) {if (candefault) GTK_WIDGET_SET_FLAGS (widget, GTK_CAN_DEFAULT); else GTK_WIDGET_UNSET_FLAGS(widget, GTK_CAN_DEFAULT);}
 #endif
 
 void
