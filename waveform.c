@@ -432,6 +432,16 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     return;
 }
 
+#if !GTK_CHECK_VERSION(2,18,0)
+void
+gtk_widget_get_allocation (GtkWidget *widget, GtkAllocation *allocation) {
+    (allocation)->x = widget->allocation.x;
+    (allocation)->y = widget->allocation.y;
+    (allocation)->width = widget->allocation.width;
+    (allocation)->height = widget->allocation.height;
+}
+#endif
+
 void
 queue_add (const char *fname)
 {
