@@ -228,6 +228,12 @@ on_config_changed (uintptr_t ctx)
     return 0;
 }
 
+#if !GTK_CHECK_VERSION(2,14,0)
+#define gtk_widget_get_window(widget) ((widget)->window)
+#define gtk_dialog_get_content_area(dialog) (dialog->vbox)
+#define gtk_dialog_get_action_area(dialog) (dialog->action_area)
+#endif
+
 #if !GTK_CHECK_VERSION(2,18,0)
 void
 gtk_widget_get_allocation (GtkWidget *widget, GtkAllocation *allocation) {
