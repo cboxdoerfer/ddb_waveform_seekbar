@@ -9,12 +9,13 @@ See the [AUR](https://aur.archlinux.org/packages/deadbeef-plugin-waveform-git/).
 See ebuilds [here](https://github.com/megabaks/stuff/tree/master/media-plugins/deadbeef-waveform-seekbar).
 
 ### Other distributions
+#### Build from sources
 First install DeaDBeeF (>=0.6) and sqlite3
 ```bash
 make
 ./userinstall.sh
 ```
-
+#### Binaries
 Since v0.2 you can also get ![binaries](https://github.com/cboxdoerfer/ddb_waveform_seekbar/releases). Install them as follows
 ```tar -xvf ddb_waveform_seekbar_x86_64.tar.gz -C ~/.local/lib/deadbeef```
 
