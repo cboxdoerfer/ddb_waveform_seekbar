@@ -228,6 +228,17 @@ on_config_changed (uintptr_t ctx)
     return 0;
 }
 
+#if !GTK_CHECK_VERSION(2,18,0)
+void
+gtk_widget_get_allocation (GtkWidget *widget, GtkAllocation *allocation) {
+    (allocation)->x = widget->allocation.x;
+    (allocation)->y = widget->allocation.y;
+    (allocation)->width = widget->allocation.width;
+    (allocation)->height = widget->allocation.height;
+}
+#define gtk_widget_set_can_default(widget, candefault) {if (candefault) GTK_WIDGET_SET_FLAGS (widget, GTK_CAN_DEFAULT); else GTK_WIDGET_UNSET_FLAGS(widget, GTK_CAN_DEFAULT);}
+#endif
+
 static void
 on_button_config (GtkMenuItem *menuitem, gpointer user_data)
 {
@@ -431,17 +442,6 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
 #pragma GCC diagnostic pop
     return;
 }
-
-#if !GTK_CHECK_VERSION(2,18,0)
-void
-gtk_widget_get_allocation (GtkWidget *widget, GtkAllocation *allocation) {
-    (allocation)->x = widget->allocation.x;
-    (allocation)->y = widget->allocation.y;
-    (allocation)->width = widget->allocation.width;
-    (allocation)->height = widget->allocation.height;
-}
-#define gtk_widget_set_can_default(widget, candefault) {if (candefault) GTK_WIDGET_SET_FLAGS (widget, GTK_CAN_DEFAULT); else GTK_WIDGET_UNSET_FLAGS(widget, GTK_CAN_DEFAULT);}
-#endif
 
 void
 queue_add (const char *fname)
