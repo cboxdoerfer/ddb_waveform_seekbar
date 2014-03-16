@@ -51,6 +51,7 @@
 #define     CONFSTR_WF_MIX_TO_MONO       "waveform.mix_to_mono"
 #define     CONFSTR_WF_DISPLAY_RMS       "waveform.display_rms"
 #define     CONFSTR_WF_RENDER_METHOD     "waveform.render_method"
+#define     CONFSTR_WF_SOUNDCLOUD_STYLE  "waveform.soundcloud_style"
 #define     CONFSTR_WF_SHADE_WAVEFORM    "waveform.shade_waveform"
 #define     CONFSTR_WF_BG_COLOR_R        "waveform.bg_color_r"
 #define     CONFSTR_WF_BG_COLOR_G        "waveform.bg_color_g"
@@ -93,7 +94,6 @@ typedef struct COLOUR
 
 typedef struct
 {
-    gboolean border, rectified;
     COLOUR c_fg, c_rms, c_bg;
 } RENDER;
 
@@ -146,6 +146,7 @@ static gboolean CONFIG_MIX_TO_MONO = FALSE;
 static gboolean CONFIG_CACHE_ENABLED = FALSE;
 static gboolean CONFIG_DISPLAY_RMS = TRUE;
 static gboolean CONFIG_SHADE_WAVEFORM = FALSE;
+static gboolean CONFIG_SOUNDCLOUD_STYLE = FALSE;
 static GdkColor CONFIG_BG_COLOR;
 static GdkColor CONFIG_FG_COLOR;
 static GdkColor CONFIG_PB_COLOR;
@@ -168,6 +169,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_MIX_TO_MONO,         CONFIG_MIX_TO_MONO);
     deadbeef->conf_set_int (CONFSTR_WF_DISPLAY_RMS,         CONFIG_DISPLAY_RMS);
     deadbeef->conf_set_int (CONFSTR_WF_SHADE_WAVEFORM,      CONFIG_SHADE_WAVEFORM);
+    deadbeef->conf_set_int (CONFSTR_WF_SOUNDCLOUD_STYLE,    CONFIG_SOUNDCLOUD_STYLE);
     deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
     deadbeef->conf_set_int (CONFSTR_WF_BORDER_WIDTH,        CONFIG_BORDER_WIDTH);
     deadbeef->conf_set_int (CONFSTR_WF_MAX_FILE_LENGTH,     CONFIG_MAX_FILE_LENGTH);
@@ -199,6 +201,7 @@ load_config (void)
     CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,             FALSE);
     CONFIG_DISPLAY_RMS = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RMS,              TRUE);
     CONFIG_SHADE_WAVEFORM = deadbeef->conf_get_int (CONFSTR_WF_SHADE_WAVEFORM,       FALSE);
+    CONFIG_SOUNDCLOUD_STYLE = deadbeef->conf_get_int (CONFSTR_WF_SOUNDCLOUD_STYLE,   FALSE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
     CONFIG_BORDER_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_BORDER_WIDTH,               1);
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
@@ -229,8 +232,6 @@ load_config (void)
 
     render =
     (RENDER) {
-        /*border*/ FALSE,
-        /*rectified*/ FALSE,
         /*foreground*/  { CONFIG_FG_COLOR.red/65535.f,CONFIG_FG_COLOR.green/65535.f,CONFIG_FG_COLOR.blue/65535.f, CONFIG_FG_ALPHA/65535.f },
         /*wave-rms*/    { CONFIG_FG_RMS_COLOR.red/65535.f,CONFIG_FG_RMS_COLOR.green/65535.f,CONFIG_FG_RMS_COLOR.blue/65535.f, CONFIG_FG_RMS_ALPHA/65535.f },
         /*background*/  { CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f, CONFIG_BG_ALPHA/65535.f },
@@ -287,6 +288,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     GtkWidget *render_method_spikes;
     GtkWidget *render_method_bars;
     GtkWidget *shade_waveform;
+    GtkWidget *soundcloud_style;
     GtkWidget *dialog_action_area13;
     GtkWidget *applybutton1;
     GtkWidget *cancelbutton1;
@@ -294,7 +296,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     waveform_properties = gtk_dialog_new ();
-    gtk_widget_set_size_request (waveform_properties, -1, 350);
+    gtk_widget_set_size_request (waveform_properties, -1, 400);
     gtk_window_set_title (GTK_WINDOW (waveform_properties), "Waveform Properties");
     gtk_window_set_type_hint (GTK_WINDOW (waveform_properties), GDK_WINDOW_TYPE_HINT_DIALOG);
 
@@ -380,6 +382,10 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     gtk_widget_show (render_method_bars);
     gtk_box_pack_start (GTK_BOX (vbox02), render_method_bars, TRUE, TRUE, 0);
 
+    soundcloud_style = gtk_check_button_new_with_label ("Soundcloud style");
+    gtk_widget_show (soundcloud_style);
+    gtk_box_pack_start (GTK_BOX (vbox02), soundcloud_style, TRUE, TRUE, 0);
+
     shade_waveform = gtk_check_button_new_with_label ("Shade waveform");
     gtk_widget_show (shade_waveform);
     gtk_box_pack_start (GTK_BOX (vbox02), shade_waveform, TRUE, TRUE, 0);
@@ -428,6 +434,9 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (log_scale), CONFIG_LOG_ENABLED);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (display_rms), CONFIG_DISPLAY_RMS);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (shade_waveform), CONFIG_SHADE_WAVEFORM);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (soundcloud_style), CONFIG_SOUNDCLOUD_STYLE);
+
+    gtk_widget_set_sensitive (display_rms, !CONFIG_SOUNDCLOUD_STYLE);
 
     switch (CONFIG_RENDER_METHOD) {
     case SPIKES:
@@ -453,6 +462,8 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
             CONFIG_LOG_ENABLED = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (log_scale));
             CONFIG_DISPLAY_RMS = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (display_rms));
             CONFIG_SHADE_WAVEFORM = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (shade_waveform));
+            CONFIG_SOUNDCLOUD_STYLE = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (soundcloud_style));
+            gtk_widget_set_sensitive (display_rms, !CONFIG_SOUNDCLOUD_STYLE);
             if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_spikes)) == TRUE) {
                 CONFIG_RENDER_METHOD = SPIKES;
             }
@@ -654,7 +665,7 @@ draw_cairo_line_path (cairo_t* cr, DRECT *pts, const COLOUR *c)
 static inline void
 draw_cairo_line (cairo_t* cr, DRECT *pts, const COLOUR *c)
 {
-    cairo_set_source_rgba (cr, C_COLOUR (c));
+//    cairo_set_source_rgba (cr, C_COLOUR (c));
     cairo_move_to (cr, pts->x1, pts->y1);
     cairo_line_to (cr, pts->x2, pts->y2);
     cairo_stroke (cr);
@@ -933,13 +944,15 @@ waveform_draw (void *user_data, int shaded)
 
     float x_off;
     if (CONFIG_RENDER_METHOD == BARS) {
-        x_off = 0.0;
-        cairo_set_line_width (cr, 1);
-        cairo_set_antialias (cr, CAIRO_ANTIALIAS_NONE);
+        cairo_set_line_width (min_cr, 1);
+        cairo_set_antialias (min_cr, CAIRO_ANTIALIAS_NONE);
+        cairo_set_line_width (max_cr, 1);
+        cairo_set_antialias (max_cr, CAIRO_ANTIALIAS_NONE);
+        cairo_set_source_rgba (min_cr, color_fg.r, color_fg.g, color_fg.b, 1);
+        cairo_set_source_rgba (max_cr, color_fg.r, color_fg.g, color_fg.b, 1);
     }
-    else {
-        x_off = 0.5;
-    }
+
+    x_off = 0.5;
 
     int channels = w->channels;
     int samples_size = VALUES_PER_SAMPLE * channels;
@@ -979,12 +992,35 @@ waveform_draw (void *user_data, int shaded)
         offset = ch * VALUES_PER_SAMPLE;
         samples_per_buf = samples_per_buf_temp;
 
-        double center = floor (top + waveform_height/2 + 0.5);
+        double center;
+        if (CONFIG_SOUNDCLOUD_STYLE) {
+            center = floor (top + waveform_height * 0.7 + 0.5);
+        }
+        else {
+            center = floor (top + waveform_height/2 + 0.5);
+        }
+
         if (CONFIG_RENDER_METHOD == SPIKES) {
             cairo_move_to (max_cr, left, center);
             cairo_move_to (min_cr, left, center);
             cairo_move_to (rms_max_cr, left, center);
             cairo_move_to (rms_min_cr, left, center);
+        }
+
+        cairo_pattern_t *pat;
+        cairo_pattern_t *pat1;
+        if (CONFIG_SOUNDCLOUD_STYLE) {
+            pat = cairo_pattern_create_linear (0, top, 0, center);
+            cairo_pattern_add_color_stop_rgba (pat, 1, color_fg.r, color_fg.g, color_fg.b, 1);
+            cairo_pattern_add_color_stop_rgba (pat, 0, color_fg.r, color_fg.g, color_fg.b, 0.7);
+
+            pat1 = cairo_pattern_create_linear (0, center, 0, center + 0.3 * waveform_height);
+            cairo_pattern_add_color_stop_rgba (pat1, 0, color_fg.r - 0.1 * color_fg.r, color_fg.g - 0.1 * color_fg.g, color_fg.b - 0.1 * color_fg.b, 1);
+            cairo_pattern_add_color_stop_rgba (pat1, 0, color_fg.r, color_fg.g, color_fg.b, 0.7);
+            if (CONFIG_RENDER_METHOD == BARS) {
+                cairo_set_source (min_cr, pat1);
+                cairo_set_source (max_cr, pat);
+            }
         }
 
         for (int x = 0; x < width; x++) {
@@ -1029,10 +1065,10 @@ waveform_draw (void *user_data, int shaded)
             }
 
             double yoff;
-            if (render.rectified) {
-                yoff = waveform_height;
-                min = waveform_height * MAX (fabsf (min), fabsf (max));
-                max = 0;
+            if (CONFIG_SOUNDCLOUD_STYLE) {
+                yoff = 0.7 * waveform_height;
+                min = 0.3 * waveform_height * min;
+                max = 0.7 * waveform_height * max;
                 rms = waveform_height * rms;
             }
             else {
@@ -1046,49 +1082,35 @@ waveform_draw (void *user_data, int shaded)
             if (CONFIG_RENDER_METHOD == SPIKES) {
                 DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
                 draw_cairo_line_path (min_cr, &pts0, &color_fg);
-                if (!render.rectified) {
-                    DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
-                    draw_cairo_line_path (max_cr, &pts1, &color_fg);
-                }
+                DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
+                draw_cairo_line_path (max_cr, &pts1, &color_fg);
             }
             else if (CONFIG_RENDER_METHOD == BARS) {
-                DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
-                draw_cairo_line (cr, &pts0, &color_fg);
-                if (!render.rectified) {
-                    DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
-                    draw_cairo_line (cr, &pts1, &color_fg);
-                }
+                DRECT pts0 = { left + x, top + yoff, left + x, top + yoff - min };
+                draw_cairo_line (min_cr, &pts0, &color_fg);
+                DRECT pts1 = { left + x, top + yoff, left + x, top + yoff - max };
+                draw_cairo_line (max_cr, &pts1, &color_fg);
             }
 
-            if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == SPIKES) {
-                DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
-                draw_cairo_line_path (rms_min_cr, &pts0, &color_rms);
-
-                if (!render.rectified) {
+            if (!CONFIG_SOUNDCLOUD_STYLE) {
+                if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == SPIKES) {
+                    DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
+                    draw_cairo_line_path (rms_min_cr, &pts0, &color_rms);
                     DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
                     draw_cairo_line_path (rms_max_cr, &pts1, &color_rms);
                 }
-            }
-            else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
-                DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
-                draw_cairo_line (cr, &pts0, &color_rms);
-
-                if (!render.rectified) {
-                    DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
-                    draw_cairo_line (cr, &pts1, &color_rms);
+                else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
+                    DRECT pts0 = { left + x, top + yoff, left + x, top + yoff - rms };
+                    draw_cairo_line (min_cr, &pts0, &color_rms);
+                    DRECT pts1 = { left + x, top + yoff, left + x, top + yoff + rms };
+                    draw_cairo_line (max_cr, &pts1, &color_rms);
                 }
             }
 
-            if (CONFIG_RENDER_METHOD == BARS) {
-                pmin = 0;
-                pmax = 0;
-                prms = 0;
-            }
-            else {
-                pmin = min;
-                pmax = max;
-                prms = rms;
-            }
+            pmin = min;
+            pmax = max;
+            prms = rms;
+
             f_offset += samples_per_buf;
             samples_per_buf = floorf ((x + 1) * samples_per_x * samples_size) - f_offset;
             samples_per_buf = samples_per_buf > (max_samples_per_x * samples_size) ? (max_samples_per_x * samples_size) : samples_per_buf;
@@ -1104,12 +1126,20 @@ waveform_draw (void *user_data, int shaded)
             cairo_close_path (min_cr);
             cairo_close_path (rms_max_cr);
             cairo_close_path (rms_min_cr);
+            if (CONFIG_SOUNDCLOUD_STYLE) {
+                cairo_set_source (min_cr, pat1);
+                cairo_set_source (max_cr, pat);
+            }
             cairo_fill (max_cr);
             cairo_fill (min_cr);
             cairo_fill (rms_max_cr);
             cairo_fill (rms_min_cr);
         }
 
+        if (CONFIG_SOUNDCLOUD_STYLE) {
+            cairo_pattern_destroy (pat);
+            cairo_pattern_destroy (pat1);
+        }
     }
     if (!CONFIG_SHADE_WAVEFORM && shaded == 1) {
         draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, CONFIG_PB_ALPHA, 0, 0, a.width, a.height);
