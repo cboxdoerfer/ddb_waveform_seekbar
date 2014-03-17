@@ -766,20 +766,20 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
         pos = (deadbeef->streamer_get_playpos () * width)/ dur + left;
 
         deadbeef->mutex_lock (w->mutex_rendering);
-        cairo_save (cr);
         if (a.height != w->height || a.width != w->width) {
+            cairo_save (cr);
             cairo_translate (cr, 0, 0);
             cairo_scale (cr, a.width/w->width, a.height/w->height);
             cairo_set_source_surface (cr, w->surf_shaded, 0, 0);
             cairo_rectangle (cr, 0, 0, pos / (a.width/w->width), height / (a.height/w->height));
             cairo_fill (cr);
+            cairo_restore (cr);
         }
         else {
             cairo_set_source_surface (cr, w->surf_shaded, 0, 0);
             cairo_rectangle (cr, left, top, pos, height);
             cairo_fill (cr);
         }
-        cairo_restore (cr);
         deadbeef->mutex_unlock (w->mutex_rendering);
 
         if (!CONFIG_SHADE_WAVEFORM) {
@@ -948,8 +948,14 @@ waveform_draw (void *user_data, int shaded)
         cairo_set_antialias (min_cr, CAIRO_ANTIALIAS_NONE);
         cairo_set_line_width (max_cr, 1);
         cairo_set_antialias (max_cr, CAIRO_ANTIALIAS_NONE);
+        cairo_set_line_width (rms_min_cr, 1);
+        cairo_set_antialias (rms_min_cr, CAIRO_ANTIALIAS_NONE);
+        cairo_set_line_width (rms_max_cr, 1);
+        cairo_set_antialias (rms_max_cr, CAIRO_ANTIALIAS_NONE);
         cairo_set_source_rgba (min_cr, color_fg.r, color_fg.g, color_fg.b, 1);
         cairo_set_source_rgba (max_cr, color_fg.r, color_fg.g, color_fg.b, 1);
+        cairo_set_source_rgba (rms_min_cr, color_rms.r, color_rms.g, color_rms.b, 1);
+        cairo_set_source_rgba (rms_max_cr, color_rms.r, color_rms.g, color_rms.b, 1);
     }
 
     x_off = 0.5;
@@ -1101,9 +1107,9 @@ waveform_draw (void *user_data, int shaded)
                 }
                 else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
                     DRECT pts0 = { left + x, top + yoff, left + x, top + yoff - rms };
-                    draw_cairo_line (min_cr, &pts0, &color_rms);
+                    draw_cairo_line (rms_min_cr, &pts0, &color_rms);
                     DRECT pts1 = { left + x, top + yoff, left + x, top + yoff + rms };
-                    draw_cairo_line (max_cr, &pts1, &color_rms);
+                    draw_cairo_line (rms_max_cr, &pts1, &color_rms);
                 }
             }
 
@@ -1158,18 +1164,18 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
     w_waveform_t *w = user_data;
 
     deadbeef->mutex_lock (w->mutex_rendering);
-    cairo_save (cr);
     if (height != w->height || width != w->width) {
+        cairo_save (cr);
         cairo_translate (cr, x, y);
         cairo_scale (cr, width/w->width, height/w->height);
         cairo_set_source_surface (cr, w->surf, x, y);
         cairo_paint (cr);
+        cairo_restore (cr);
     }
     else {
         cairo_set_source_surface (cr, w->surf, x, y);
         cairo_paint (cr);
     }
-    cairo_restore (cr);
     deadbeef->mutex_unlock (w->mutex_rendering);
 }
 
@@ -1183,14 +1189,14 @@ waveform_border_draw (void *user_data, cairo_t *cr, int x, int y, int width, int
 #pragma GCC diagnostic pop
     GdkColor border = style->dark[GTK_STATE_NORMAL];
 
-    cairo_save (cr);
+    //cairo_save (cr);
     cairo_set_antialias (cr, CAIRO_ANTIALIAS_NONE);
     cairo_set_line_width (cr, CONFIG_BORDER_WIDTH);
     cairo_rectangle (cr, x, y, width, height);
     cairo_stroke_preserve (cr);
     cairo_set_source_rgba (cr,border.red/65535.f,border.green/65535.f,border.blue/65535.f,1);
     cairo_stroke (cr);
-    cairo_restore (cr);
+    //cairo_restore (cr);
 }
 
 void
