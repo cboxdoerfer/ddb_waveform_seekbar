@@ -71,6 +71,8 @@
 #define     CONFSTR_WF_FG_RMS_ALPHA      "waveform.fg_rms_alpha"
 
 #define     CONFSTR_WF_BORDER_WIDTH      "waveform.border_width"
+#define     CONFSTR_WF_CURSOR_WIDTH      "waveform.cursor_width"
+#define     CONFSTR_WF_FONT_SIZE      "waveform.font_size"
 #define     CONFSTR_WF_MAX_FILE_LENGTH   "waveform.max_file_length"
 #define     CONFSTR_WF_CACHE_ENABLED     "waveform.cache_enabled"
 #define     CONFSTR_WF_NUM_SAMPLES       "waveform.num_samples"
@@ -157,6 +159,8 @@ static guint16  CONFIG_PB_ALPHA;
 static guint16  CONFIG_FG_RMS_ALPHA;
 static gint     CONFIG_RENDER_METHOD = SPIKES;
 static gint     CONFIG_BORDER_WIDTH = 1;
+static gint     CONFIG_CURSOR_WIDTH = 3;
+static gint     CONFIG_FONT_SIZE = 18;
 static gint     CONFIG_MAX_FILE_LENGTH = 180;
 static gint     CONFIG_NUM_SAMPLES = 2048;
 
@@ -172,6 +176,8 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_SOUNDCLOUD_STYLE,    CONFIG_SOUNDCLOUD_STYLE);
     deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
     deadbeef->conf_set_int (CONFSTR_WF_BORDER_WIDTH,        CONFIG_BORDER_WIDTH);
+    deadbeef->conf_set_int (CONFSTR_WF_CURSOR_WIDTH,        CONFIG_CURSOR_WIDTH);
+    deadbeef->conf_set_int (CONFSTR_WF_FONT_SIZE,           CONFIG_FONT_SIZE);
     deadbeef->conf_set_int (CONFSTR_WF_MAX_FILE_LENGTH,     CONFIG_MAX_FILE_LENGTH);
     deadbeef->conf_set_int (CONFSTR_WF_NUM_SAMPLES,         CONFIG_NUM_SAMPLES);
     deadbeef->conf_set_int (CONFSTR_WF_CACHE_ENABLED,       CONFIG_CACHE_ENABLED);
@@ -204,6 +210,8 @@ load_config (void)
     CONFIG_SOUNDCLOUD_STYLE = deadbeef->conf_get_int (CONFSTR_WF_SOUNDCLOUD_STYLE,   FALSE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
     CONFIG_BORDER_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_BORDER_WIDTH,               1);
+    CONFIG_CURSOR_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_CURSOR_WIDTH,               3);
+    CONFIG_FONT_SIZE = deadbeef->conf_get_int (CONFSTR_WF_FONT_SIZE,                    18);
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
     CONFIG_NUM_SAMPLES = deadbeef->conf_get_int (CONFSTR_WF_NUM_SAMPLES,              2048);
     CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,         FALSE);
@@ -756,7 +764,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
 
-    int cursor_width = 3;
+    int cursor_width = CONFIG_CURSOR_WIDTH;
     float pos = 0;
     float seek_pos = 0;
 
@@ -824,7 +832,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
 
                 cairo_save (cr);
                 cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
-                cairo_set_font_size (cr, 18);
+                cairo_set_font_size (cr, CONFIG_FONT_SIZE);
 
                 cairo_text_extents_t ex;
                 cairo_text_extents (cr, s, &ex);
@@ -855,7 +863,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             const char *text = "Streaming...";
             cairo_save (cr);
             cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
-            cairo_set_font_size (cr, 18);
+            cairo_set_font_size (cr, CONFIG_FONT_SIZE);
             cairo_text_extents_t ex;
             cairo_text_extents (cr, text, &ex);
             int text_x = (width - ex.width)/2;
@@ -1034,21 +1042,19 @@ waveform_draw (void *user_data, int shaded)
                 break;
             }
 
-            if (w->read) {
-                min = 1.0; max = -1.0; rms = 0.0;
-            }
-            else {
-                min = 0.0; max = 0.0; rms = 0.0;
+            min = 0.0; max = 0.0; rms = 0.0;
+
+            int counter = 0;
+            int offset_temp = offset;
+            for (; offset < offset_temp + samples_per_buf; offset += samples_size, counter++) {
+                max += (float)w->buffer[offset]/1000;
+                min += (float)w->buffer[offset+1]/1000;
+                rms += (float)w->buffer[offset+2]/1000;
             }
 
-            int offset_temp = offset;
-            for (int j = offset; j < offset + samples_per_buf; j = j + samples_size) {
-                max = MAX (max, (float)w->buffer[j]/1000);
-                min = MIN (min, (float)w->buffer[j+1]/1000);
-                rms = (rms + (float)w->buffer[j+2]/1000)/2;
-                offset_temp += samples_size;
-            }
-            offset = offset_temp;
+            max /= counter;
+            min /= counter;
+            rms /= counter;
 
             if (gain != 1.0) {
                 min *= gain;
@@ -1750,6 +1756,8 @@ waveform_get_actions (DB_playItem_t *it)
 
 static const char settings_dlg[] =
     "property \"Border width: \"                    spinbtn[0,1,1] "            CONFSTR_WF_BORDER_WIDTH         " 1 ;\n"
+    "property \"Cursor width: \"                    spinbtn[1,3,1] "            CONFSTR_WF_CURSOR_WIDTH         " 3 ;\n"
+    "property \"Font size: \"                       spinbtn[8,20,1] "           CONFSTR_WF_FONT_SIZE           " 18 ;\n"
     "property \"Ignore files longer than x minutes "
                 "(-1 scans every file): \"          spinbtn[-1,9999,1] "        CONFSTR_WF_MAX_FILE_LENGTH    " 180 ;\n"
     "property \"Enable cache (experimental) \"      checkbox "                  CONFSTR_WF_CACHE_ENABLED        " 0 ;\n"
