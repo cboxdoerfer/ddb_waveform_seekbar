@@ -1,12 +1,13 @@
 pkgname=deadbeef-plugin-waveform-git
-pkgver=20130228
-pkgrel=1
+pkgver=20140318
+pkgrel=2
 pkgdesc="Waveform Seekbar Plugin for the DeaDBeeF audio player (development version)"
 url="https://github.com/cboxdoerfer/ddb_waveform_seekbar"
 arch=('i686' 'x86_64')
 license='GPL2'
 depends=('deadbeef' 'sqlite')
 makedepends=('git')
+conflicts=('deadbeef-plugin-waveform')
 
 _gitname=ddb_waveform_seekbar
 _gitroot=https://github.com/cboxdoerfer/${_gitname}
@@ -21,6 +22,7 @@ build() {
     git pull origin master
   else
     git clone $_gitroot
+    cd $_gitname
   fi
 
   msg "GIT checkout done or server timeout"
