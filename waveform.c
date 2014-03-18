@@ -145,7 +145,7 @@ static uintptr_t mutex;
 
 static gboolean CONFIG_LOG_ENABLED = FALSE;
 static gboolean CONFIG_MIX_TO_MONO = FALSE;
-static gboolean CONFIG_CACHE_ENABLED = FALSE;
+static gboolean CONFIG_CACHE_ENABLED = TRUE;
 static gboolean CONFIG_DISPLAY_RMS = TRUE;
 static gboolean CONFIG_SHADE_WAVEFORM = FALSE;
 static gboolean CONFIG_SOUNDCLOUD_STYLE = FALSE;
@@ -214,7 +214,7 @@ load_config (void)
     CONFIG_FONT_SIZE = deadbeef->conf_get_int (CONFSTR_WF_FONT_SIZE,                    18);
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
     CONFIG_NUM_SAMPLES = deadbeef->conf_get_int (CONFSTR_WF_NUM_SAMPLES,              2048);
-    CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,         FALSE);
+    CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,          TRUE);
 
     CONFIG_BG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,             50000);
     CONFIG_BG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,           50000);
@@ -1760,7 +1760,7 @@ static const char settings_dlg[] =
     "property \"Font size: \"                       spinbtn[8,20,1] "           CONFSTR_WF_FONT_SIZE           " 18 ;\n"
     "property \"Ignore files longer than x minutes "
                 "(-1 scans every file): \"          spinbtn[-1,9999,1] "        CONFSTR_WF_MAX_FILE_LENGTH    " 180 ;\n"
-    "property \"Enable cache (experimental) \"      checkbox "                  CONFSTR_WF_CACHE_ENABLED        " 0 ;\n"
+    "property \"Use cache \"                        checkbox "                  CONFSTR_WF_CACHE_ENABLED        " 1 ;\n"
     "property \"Number of samples (per channel): \" spinbtn[2048,4092,2048] "   CONFSTR_WF_NUM_SAMPLES       " 2048 ;\n"
 ;
 
@@ -1770,7 +1770,7 @@ static DB_misc_t plugin = {
     .plugin.api_vmajor      = 1,
     .plugin.api_vminor      = 5,
     .plugin.version_major   = 0,
-    .plugin.version_minor   = 2,
+    .plugin.version_minor   = 3,
 #if GTK_CHECK_VERSION(3,0,0)
     .plugin.id              = "waveform_seekbar-gtk3",
 #else
