@@ -1412,22 +1412,24 @@ waveform_get_wavedata (gpointer user_data)
     w_waveform_t *w = user_data;
     deadbeef->background_job_increment ();
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
-    char *uri = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
-    if (it && waveform_valid_track (it, uri)) {
-        if (CONFIG_CACHE_ENABLED && waveform_cached (uri)) {
-            waveform_get_from_cache (w, uri);
+    if (it) {
+        char *uri = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
+        if (uri && waveform_valid_track (it, uri)) {
+            if (CONFIG_CACHE_ENABLED && waveform_cached (uri)) {
+                waveform_get_from_cache (w, uri);
+            }
+            else {
+                waveform_generate_wavedata (w, it, uri);
+            }
         }
-        else {
-            waveform_generate_wavedata (w, it, uri);
+        if (uri) {
+            free (uri);
         }
     }
     waveform_draw (w, 0);
     waveform_draw (w, 1);
     if (it) {
         deadbeef->pl_item_unref (it);
-    }
-    if (uri) {
-       free (uri);
     }
     deadbeef->background_job_decrement ();
 }
@@ -1523,7 +1525,7 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
     if (trk) {
         GtkAllocation a;
         gtk_widget_get_allocation (widget, &a);
-        float time = (event->x + CONFIG_BORDER_WIDTH) * deadbeef->pl_get_item_duration (trk) / (a.width - 2 * CONFIG_BORDER_WIDTH);
+        float time = (event->x - CONFIG_BORDER_WIDTH) * deadbeef->pl_get_item_duration (trk) / (a.width - 2 * CONFIG_BORDER_WIDTH);
         if (time < 0) {
             time = 0;
         }
