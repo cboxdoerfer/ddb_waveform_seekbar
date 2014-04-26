@@ -70,6 +70,7 @@
 #define     CONFSTR_WF_FG_RMS_COLOR_B    "waveform.fg_rms_color_b"
 #define     CONFSTR_WF_FG_RMS_ALPHA      "waveform.fg_rms_alpha"
 
+#define     CONFSTR_WF_REFRESH_INTERVAL  "waveform.refresh_interval"
 #define     CONFSTR_WF_BORDER_WIDTH      "waveform.border_width"
 #define     CONFSTR_WF_CURSOR_WIDTH      "waveform.cursor_width"
 #define     CONFSTR_WF_FONT_SIZE      "waveform.font_size"
@@ -163,6 +164,7 @@ static gint     CONFIG_CURSOR_WIDTH = 3;
 static gint     CONFIG_FONT_SIZE = 18;
 static gint     CONFIG_MAX_FILE_LENGTH = 180;
 static gint     CONFIG_NUM_SAMPLES = 2048;
+static gint     CONFIG_REFRESH_INTERVAL = 33;
 
 static RENDER render;
 
@@ -179,6 +181,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_CURSOR_WIDTH,        CONFIG_CURSOR_WIDTH);
     deadbeef->conf_set_int (CONFSTR_WF_FONT_SIZE,           CONFIG_FONT_SIZE);
     deadbeef->conf_set_int (CONFSTR_WF_MAX_FILE_LENGTH,     CONFIG_MAX_FILE_LENGTH);
+    deadbeef->conf_set_int (CONFSTR_WF_REFRESH_INTERVAL,    CONFIG_REFRESH_INTERVAL);
     deadbeef->conf_set_int (CONFSTR_WF_NUM_SAMPLES,         CONFIG_NUM_SAMPLES);
     deadbeef->conf_set_int (CONFSTR_WF_CACHE_ENABLED,       CONFIG_CACHE_ENABLED);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,          CONFIG_BG_COLOR.red);
@@ -212,6 +215,7 @@ load_config (void)
     CONFIG_BORDER_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_BORDER_WIDTH,               1);
     CONFIG_CURSOR_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_CURSOR_WIDTH,               3);
     CONFIG_FONT_SIZE = deadbeef->conf_get_int (CONFSTR_WF_FONT_SIZE,                    18);
+    CONFIG_REFRESH_INTERVAL = deadbeef->conf_get_int (CONFSTR_WF_REFRESH_INTERVAL,      33);
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
     CONFIG_NUM_SAMPLES = deadbeef->conf_get_int (CONFSTR_WF_NUM_SAMPLES,              2048);
     CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,          TRUE);
@@ -1461,23 +1465,6 @@ waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data
         g_source_remove (w->resizetimer);
     }
     w->resizetimer = g_timeout_add (500, waveform_redraw_cb, w);
-
-    // int fps = deadbeef->conf_get_int ("gtkui.refresh_rate", 10);
-    // if (fps < 1) {
-    //     fps = 1;
-    // }
-    // else if (fps > 30) {
-    //     fps = 30;
-    // }
-
-    // int tm = 1000/fps;
-
-    // if (w->drawtimer) {
-    //     g_source_remove (w->drawtimer);
-    //     w->drawtimer = 0;
-    // }
-    // w->drawtimer = g_timeout_add (tm, w_waveform_draw_cb, w);
-
     return FALSE;
 }
 
@@ -1486,8 +1473,6 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
 {
     w_waveform_t *w = user_data;
     if (w->seekbar_moving) {
-        GtkAllocation a;
-        gtk_widget_get_allocation (widget, &a);
         w->seekbar_move_x = event->x + CONFIG_BORDER_WIDTH;
         gtk_widget_queue_draw (widget);
     }
@@ -1503,8 +1488,6 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
     }
     w->seekbar_moving = 1;
     w->seekbar_moved = 0.0;
-    GtkAllocation a;
-    gtk_widget_get_allocation (widget, &a);
     w->seekbar_move_x = event->x + CONFIG_BORDER_WIDTH;
     w->seekbar_move_x_clicked = event->x;
     return TRUE;
@@ -1558,6 +1541,11 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         break;
     case DB_EV_CONFIGCHANGED:
         on_config_changed (ctx);
+        if (w->drawtimer) {
+            g_source_remove (w->drawtimer);
+            w->drawtimer = 0;
+        }
+        w->drawtimer = g_timeout_add (CONFIG_REFRESH_INTERVAL, w_waveform_draw_cb, w);
         g_idle_add (waveform_redraw_cb, w);
         break;
     }
@@ -1570,6 +1558,7 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     w_waveform_t *wf = (w_waveform_t *)w;
     GtkAllocation a;
     gtk_widget_get_allocation (wf->drawarea, &a);
+    load_config ();
     wf->max_buffer_len = MAX_SAMPLES * VALUES_PER_SAMPLE * MAX_CHANNELS * sizeof (short);
     deadbeef->mutex_lock (wf->mutex);
     wf->buffer = malloc (sizeof (short) * wf->max_buffer_len);
@@ -1595,21 +1584,11 @@ w_waveform_init (ddb_gtkui_widget_t *w)
         wf->resizetimer = 0;
     }
 
-    int fps = deadbeef->conf_get_int ("gtkui.refresh_rate", 10);
-    if (fps < 1) {
-        fps = 1;
-    }
-    else if (fps > 30) {
-        fps = 30;
-    }
-
-    int tm = 1000/fps;
-
     if (wf->drawtimer) {
         g_source_remove (wf->drawtimer);
         wf->drawtimer = 0;
     }
-    wf->drawtimer = g_timeout_add (tm, w_waveform_draw_cb, w);
+    wf->drawtimer = g_timeout_add (CONFIG_REFRESH_INTERVAL, w_waveform_draw_cb, w);
 }
 
 static ddb_gtkui_widget_t *
@@ -1757,6 +1736,7 @@ waveform_get_actions (DB_playItem_t *it)
 
 
 static const char settings_dlg[] =
+    "property \"Refresh interval (ms): \"           spinbtn[10,1000,1] "        CONFSTR_WF_REFRESH_INTERVAL    " 33 ;\n"
     "property \"Border width: \"                    spinbtn[0,1,1] "            CONFSTR_WF_BORDER_WIDTH         " 1 ;\n"
     "property \"Cursor width: \"                    spinbtn[1,3,1] "            CONFSTR_WF_CURSOR_WIDTH         " 3 ;\n"
     "property \"Font size: \"                       spinbtn[8,20,1] "           CONFSTR_WF_FONT_SIZE           " 18 ;\n"
