@@ -308,7 +308,6 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     waveform_properties = gtk_dialog_new ();
-    gtk_widget_set_size_request (waveform_properties, -1, 400);
     gtk_window_set_title (GTK_WINDOW (waveform_properties), "Waveform Properties");
     gtk_window_set_type_hint (GTK_WINDOW (waveform_properties), GDK_WINDOW_TYPE_HINT_DIALOG);
 
