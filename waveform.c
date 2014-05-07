@@ -106,6 +106,7 @@ typedef struct
     GtkWidget *popup;
     GtkWidget *popup_item;
     GtkWidget *drawarea;
+    GtkWidget *frame;
     guint drawtimer;
     guint resizetimer;
     short *buffer;
@@ -167,6 +168,15 @@ static gint     CONFIG_NUM_SAMPLES = 2048;
 static gint     CONFIG_REFRESH_INTERVAL = 33;
 
 static RENDER render;
+
+static gboolean
+waveform_draw_cb (void *user_data);
+
+static gboolean
+waveform_redraw_cb (void *user_data);
+
+void
+waveform_draw (void *user_data, int shaded);
 
 static void
 save_config (void)
@@ -251,9 +261,26 @@ load_config (void)
 }
 
 static int
-on_config_changed (uintptr_t ctx)
+on_config_changed (void *widget)
 {
+    w_waveform_t *w = (w_waveform_t *) widget;
     load_config ();
+    // enable/disable border
+    switch (CONFIG_BORDER_WIDTH) {
+        case 0:
+            gtk_frame_set_shadow_type ((GtkFrame *)w->frame, GTK_SHADOW_NONE);
+            break;
+        case 1:
+            gtk_frame_set_shadow_type ((GtkFrame *)w->frame, GTK_SHADOW_IN);
+            break;
+    }
+
+    if (w->drawtimer) {
+        g_source_remove (w->drawtimer);
+        w->drawtimer = 0;
+    }
+    w->drawtimer = g_timeout_add (CONFIG_REFRESH_INTERVAL, waveform_draw_cb, w);
+    g_idle_add (waveform_redraw_cb, w);
     return 0;
 }
 
@@ -587,26 +614,15 @@ alt_log_meter (float power)
     return _log_meter (power, -192.0, 0.0, 8.0);
 }
 
-static inline float coefficient_to_dB (float coeff)
+static inline float
+coefficient_to_dB (float coeff)
 {
     return 20.0f * log10 (coeff);
 }
 /* end of ardour copy */
 
-#ifdef EQUAL_VSPACE_LOG_TICKS
-static inline float dB_to_coefficient (float dB)
-{
-    return dB > -318.8f ? pow (10.0f, dB * 0.05f) : 0.0f;
-}
-
-static inline float
-inv_log_meter (float power)
-{
-    return (power < 0.00000000026 ? -192.0 : (pow (power, 0.125) * 192.0) -192.0);
-}
-#endif
-
-void color_contrast (GdkColor * color)
+static void
+color_contrast (GdkColor * color)
 {
     // Counting the perceptive luminance - human eye favors green color...
     int a = 65535 - ( 2 * color->red + 3 * color->green + color->blue) / 6;
@@ -619,7 +635,7 @@ void color_contrast (GdkColor * color)
     color->green = a;
 }
 
-enum
+enum BORDERS
 {
     CORNER_NONE        = 0,
     CORNER_TOPLEFT     = 1,
@@ -676,7 +692,6 @@ draw_cairo_line_path (cairo_t* cr, DRECT *pts, const COLOUR *c)
 static inline void
 draw_cairo_line (cairo_t* cr, DRECT *pts, const COLOUR *c)
 {
-//    cairo_set_source_rgba (cr, C_COLOUR (c));
     cairo_move_to (cr, pts->x1, pts->y1);
     cairo_line_to (cr, pts->x2, pts->y2);
     cairo_stroke (cr);
@@ -728,11 +743,8 @@ w_waveform_destroy (ddb_gtkui_widget_t *widget)
     }
 }
 
-void
-waveform_draw (void *user_data, int shaded);
-
 static gboolean
-w_waveform_draw_cb (void *user_data)
+waveform_draw_cb (void *user_data)
 {
     w_waveform_t *w = user_data;
     gtk_widget_queue_draw (w->drawarea);
@@ -764,8 +776,6 @@ void
 waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
 {
     w_waveform_t *w = user_data;
-    GtkAllocation a;
-    gtk_widget_get_allocation (w->drawarea, &a);
 
     int cursor_width = CONFIG_CURSOR_WIDTH;
     float pos = 0;
@@ -777,12 +787,12 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
         pos = (deadbeef->streamer_get_playpos () * width)/ dur + left;
 
         deadbeef->mutex_lock (w->mutex_rendering);
-        if (a.height != w->height || a.width != w->width) {
+        if (height != w->height || width != w->width) {
             cairo_save (cr);
             cairo_translate (cr, 0, 0);
-            cairo_scale (cr, a.width/w->width, a.height/w->height);
+            cairo_scale (cr, width/w->width, height/w->height);
             cairo_set_source_surface (cr, w->surf_shaded, 0, 0);
-            cairo_rectangle (cr, 0, 0, pos / (a.width/w->width), height / (a.height/w->height));
+            cairo_rectangle (cr, 0, 0, pos / (width/w->width), height / (height/w->height));
             cairo_fill (cr);
             cairo_restore (cr);
         }
@@ -854,7 +864,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
 
                 clearlooks_rounded_rectangle (cr, rec_pos, (height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
                 cairo_fill (cr);
-                cairo_move_to (cr, text_pos, (a.height + ex.height - 3)/2);
+                cairo_move_to (cr, text_pos, (height + ex.height - 3)/2);
                 GdkColor color_text = CONFIG_PB_COLOR;
                 color_contrast (&color_text);
                 cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
@@ -870,7 +880,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             cairo_text_extents_t ex;
             cairo_text_extents (cr, text, &ex);
             int text_x = (width - ex.width)/2;
-            int text_y = (a.height + ex.height - 3)/2;
+            int text_y = (height + ex.height - 3)/2;
             cairo_move_to (cr, text_x, text_y);
             GdkColor color_text = CONFIG_BG_COLOR;
             color_contrast (&color_text);
@@ -889,13 +899,13 @@ waveform_draw (void *user_data, int shaded)
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
 
-    double width = a.width - 2 * CONFIG_BORDER_WIDTH;
-    double height = a.height - 2 * CONFIG_BORDER_WIDTH;
+    double width = a.width;
+    double height = a.height;
     double waveform_height = height * 0.9;
-    double left = CONFIG_BORDER_WIDTH;
-    double top = (a.height - waveform_height + CONFIG_BORDER_WIDTH)/2;
-    w->width = a.width;
-    w->height = a.height;
+    double left = 0;
+    double top = (height - waveform_height)/2;
+    w->width = width;
+    w->height = height;
 
     float pmin = 0;
     float pmax = 0;
@@ -913,19 +923,19 @@ waveform_draw (void *user_data, int shaded)
     }
 
     deadbeef->mutex_lock (w->mutex_rendering);
-    if (!w->surf || cairo_image_surface_get_width (w->surf) != a.width || cairo_image_surface_get_height (w->surf) != a.height) {
+    if (!w->surf || cairo_image_surface_get_width (w->surf) != width || cairo_image_surface_get_height (w->surf) != height) {
         if (w->surf) {
             cairo_surface_destroy (w->surf);
             w->surf = NULL;
         }
-        w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
+        w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, width, height);
     }
-    if (!w->surf_shaded || cairo_image_surface_get_width (w->surf_shaded) != a.width || cairo_image_surface_get_height (w->surf_shaded) != a.height) {
+    if (!w->surf_shaded || cairo_image_surface_get_width (w->surf_shaded) != width || cairo_image_surface_get_height (w->surf_shaded) != height) {
         if (w->surf_shaded) {
             cairo_surface_destroy (w->surf_shaded);
             w->surf_shaded = NULL;
         }
-        w->surf_shaded = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
+        w->surf_shaded = cairo_image_surface_create (CAIRO_FORMAT_RGB24, width, height);
     }
 
     deadbeef->mutex_unlock (w->mutex_rendering);
@@ -945,7 +955,7 @@ waveform_draw (void *user_data, int shaded)
     cairo_t *rms_min_cr = cairo_create (surface);
 
     // Draw background
-    draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, a.width, a.height);
+    draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, width, height);
 
     cairo_set_line_width (cr, LINE_WIDTH);
     cairo_set_line_width (max_cr, LINE_WIDTH);
@@ -993,7 +1003,7 @@ waveform_draw (void *user_data, int shaded)
         max_samples_per_x = 1 + ceilf (samples_per_x);
         samples_per_buf = floorf (samples_per_x * (float)(samples_size));
         waveform_height = height * 0.9;
-        top = (a.height - waveform_height)/2;
+        top = (height - waveform_height)/2;
     }
 
     int samples_per_buf_temp = samples_per_buf;
@@ -1157,7 +1167,7 @@ waveform_draw (void *user_data, int shaded)
         }
     }
     if (!CONFIG_SHADE_WAVEFORM && shaded == 1) {
-        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, CONFIG_PB_ALPHA, 0, 0, a.width, a.height);
+        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, CONFIG_PB_ALPHA, 0, 0, width, height);
     }
     cairo_destroy (cr);
     cairo_destroy (max_cr);
@@ -1186,26 +1196,6 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
         cairo_paint (cr);
     }
     deadbeef->mutex_unlock (w->mutex_rendering);
-}
-
-void
-waveform_border_draw (void *user_data, cairo_t *cr, int x, int y, int width, int height)
-{
-    w_waveform_t *w = user_data;
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    GtkStyle *style = gtk_widget_get_style (w->drawarea);
-#pragma GCC diagnostic pop
-    GdkColor border = style->dark[GTK_STATE_NORMAL];
-
-    //cairo_save (cr);
-    cairo_set_antialias (cr, CAIRO_ANTIALIAS_NONE);
-    cairo_set_line_width (cr, CONFIG_BORDER_WIDTH);
-    cairo_rectangle (cr, x, y, width, height);
-    cairo_stroke_preserve (cr);
-    cairo_set_source_rgba (cr,border.red/65535.f,border.green/65535.f,border.blue/65535.f,1);
-    cairo_stroke (cr);
-    //cairo_restore (cr);
 }
 
 void
@@ -1442,17 +1432,15 @@ waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
 {
     w_waveform_t *w = user_data;
     GtkAllocation a;
-    gtk_widget_get_allocation (widget, &a);
-    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (widget));
+    gtk_widget_get_allocation (w->drawarea, &a);
+    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
 
     int x = 0;
     int y = 0;
     int width = a.width;
     int height = a.height;
-//    waveform_background_draw (w, cr, x, y, width, height);
     waveform_scale (w, cr, x, y, width, height);
-    waveform_seekbar_draw (w, cr, x + CONFIG_BORDER_WIDTH, y + CONFIG_BORDER_WIDTH, width - 2 * CONFIG_BORDER_WIDTH, height - 2 * CONFIG_BORDER_WIDTH);
-    waveform_border_draw (w, cr, x + CONFIG_BORDER_WIDTH, y + CONFIG_BORDER_WIDTH, width - CONFIG_BORDER_WIDTH, height - CONFIG_BORDER_WIDTH);
+    waveform_seekbar_draw (w, cr, x, y, width, height);
     cairo_destroy (cr);
 }
 
@@ -1472,7 +1460,7 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
 {
     w_waveform_t *w = user_data;
     if (w->seekbar_moving) {
-        w->seekbar_move_x = event->x + CONFIG_BORDER_WIDTH;
+        w->seekbar_move_x = event->x;
         gtk_widget_queue_draw (widget);
     }
     return TRUE;
@@ -1487,7 +1475,7 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
     }
     w->seekbar_moving = 1;
     w->seekbar_moved = 0.0;
-    w->seekbar_move_x = event->x + CONFIG_BORDER_WIDTH;
+    w->seekbar_move_x = event->x;
     w->seekbar_move_x_clicked = event->x;
     return TRUE;
 }
@@ -1506,12 +1494,12 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
         GtkAllocation a;
-        gtk_widget_get_allocation (widget, &a);
-        float time = (event->x - CONFIG_BORDER_WIDTH) * deadbeef->pl_get_item_duration (trk) / (a.width - 2 * CONFIG_BORDER_WIDTH);
+        gtk_widget_get_allocation (w->drawarea, &a);
+        float time = (event->x) * deadbeef->pl_get_item_duration (trk) / (a.width) * 1000.f;
         if (time < 0) {
             time = 0;
         }
-        deadbeef->sendmessage (DB_EV_SEEK, 0, time * 1000, 0);
+        deadbeef->sendmessage (DB_EV_SEEK, 0, time, 0);
         deadbeef->pl_item_unref (trk);
     }
     gtk_widget_queue_draw (widget);
@@ -1539,13 +1527,8 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         g_idle_add (waveform_redraw_cb, w);
         break;
     case DB_EV_CONFIGCHANGED:
-        on_config_changed (ctx);
-        if (w->drawtimer) {
-            g_source_remove (w->drawtimer);
-            w->drawtimer = 0;
-        }
-        w->drawtimer = g_timeout_add (CONFIG_REFRESH_INTERVAL, w_waveform_draw_cb, w);
-        g_idle_add (waveform_redraw_cb, w);
+        on_config_changed (w);
+
         break;
     }
     return 0;
@@ -1583,11 +1566,7 @@ w_waveform_init (ddb_gtkui_widget_t *w)
         wf->resizetimer = 0;
     }
 
-    if (wf->drawtimer) {
-        g_source_remove (wf->drawtimer);
-        wf->drawtimer = 0;
-    }
-    wf->drawtimer = g_timeout_add (CONFIG_REFRESH_INTERVAL, w_waveform_draw_cb, w);
+    on_config_changed (w);
 }
 
 static ddb_gtkui_widget_t *
@@ -1601,17 +1580,19 @@ w_waveform_create (void)
     w->base.destroy = w_waveform_destroy;
     w->base.message = waveform_message;
     w->drawarea = gtk_drawing_area_new ();
+    w->frame = gtk_frame_new (NULL);
     w->popup = gtk_menu_new ();
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
     w->mutex_rendering = deadbeef->mutex_create ();
     mutex = deadbeef->mutex_create ();
-    gtk_widget_show (w->drawarea);
-    gtk_container_add (GTK_CONTAINER (w->base.widget), w->drawarea);
-    gtk_widget_show (w->popup);
-    //gtk_container_add (GTK_CONTAINER (w->drawarea), w->popup);
-    gtk_widget_show (w->popup_item);
+    gtk_container_add (GTK_CONTAINER (w->base.widget), w->frame);
+    gtk_container_add (GTK_CONTAINER (w->frame), w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->popup), w->popup_item);
+    gtk_widget_show (w->drawarea);
+    gtk_widget_show (w->frame);
+    gtk_widget_show (w->popup);
+    gtk_widget_show (w->popup_item);
 
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect_after ((gpointer) w->drawarea, "expose_event", G_CALLBACK (waveform_expose_event), w);

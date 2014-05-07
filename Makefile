@@ -47,10 +47,12 @@ OBJ_GTK2?=$(patsubst %.c, $(GTK2_DIR)/%.o, $(SOURCES))
 OBJ_GTK3?=$(patsubst %.c, $(GTK3_DIR)/%.o, $(SOURCES))
 
 define compile
+	echo $(CC) $(CFLAGS) $1 $2 $< -c -o $@
 	$(CC) $(CFLAGS) $1 $2 $< -c -o $@
 endef
 
 define link
+	echo $(CC) $(LDFLAGS) $1 $2 $3 -o $@
 	$(CC) $(LDFLAGS) $1 $2 $3 -o $@
 endef
 
