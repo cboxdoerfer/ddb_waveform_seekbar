@@ -1259,12 +1259,14 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
         }
     }
     deadbeef->pl_unlock ();
+
     if (dec) {
         fileinfo = dec->open (0);
         if (fileinfo && dec->init (fileinfo, DB_PLAYITEM (it)) != 0) {
             deadbeef->pl_lock ();
             fprintf (stderr, "waveform: failed to decode file %s\n", deadbeef->pl_find_meta (it, ":URI"));
             deadbeef->pl_unlock ();
+            goto out;
         }
         float *data;
         float *buffer;
@@ -1274,22 +1276,23 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
             const int samples_per_buf = floorf ((float) nsamples_per_channel / (float) width);
             const int max_samples_per_buf = 1 + samples_per_buf;
 
-            data = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            int bytes_per_sample = fileinfo->fmt.bps / 8;
+            int samplesize = fileinfo->fmt.channels * bytes_per_sample;
+            data = malloc (sizeof (float) * max_samples_per_buf * samplesize);
             if (!data) {
                 printf ("out of memory.\n");
-                return FALSE;
+                goto out;
             }
-            memset (data, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            memset (data, 0, sizeof (float) * max_samples_per_buf * samplesize);
 
-            buffer = malloc (sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            buffer = malloc (sizeof (float) * max_samples_per_buf * samplesize);
             if (!buffer) {
                 printf ("out of memory.\n");
-                return FALSE;
+                goto out;
             }
-            memset (buffer, 0, sizeof (float) * max_samples_per_buf * fileinfo->fmt.channels);
+            memset (buffer, 0, sizeof (float) * max_samples_per_buf * samplesize);
 
-            int channels = (!CONFIG_MIX_TO_MONO) ? 1 : fileinfo->fmt.channels;
-            buffer_len = samples_per_buf * fileinfo->fmt.channels * sizeof (short);
+            buffer_len = samples_per_buf * samplesize;
 
             ddb_waveformat_t out_fmt = {
                 .bps = 32,
@@ -1299,10 +1302,6 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                 .is_float = 1,
                 .is_bigendian = 0
             };
-
-            if (buffer_len % (2*fileinfo->fmt.channels) != 0) {
-                buffer_len -= fileinfo->fmt.channels;
-            }
 
             int eof = 0;
             int counter = 0;
@@ -1323,12 +1322,9 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                 int ch;
 
                 for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
-                    if ((counter + 3) * sizeof (short) > w->max_buffer_len) {
-                        break;
-                    }
                     min = 1.0; max = -1.0; rms = 0.0;
-                    for (sample = 0; sample < samples_per_buf - ch; sample++) {
-                        if (sample * fileinfo->fmt.channels - ch > buffer_len) {
+                    for (sample = 0; sample < samples_per_buf; sample++) {
+                        if (sample * fileinfo->fmt.channels > buffer_len) {
                             fprintf (stderr, "index error!\n");
                             break;
                         }
@@ -1337,7 +1333,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                         min = MIN (min, sample_val);
                         rms += (sample_val * sample_val);
                     }
-                    rms /= samples_per_buf * channels;
+                    rms /= samples_per_buf * fileinfo->fmt.channels;
                     rms = sqrt (rms);
                     w->buffer[counter] = (short)(max*1000);
                     w->buffer[counter+1] = (short)(min*1000);
@@ -1359,6 +1355,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
             }
         }
     }
+out:
     if (dec && fileinfo) {
         dec->free (fileinfo);
         fileinfo = NULL;
