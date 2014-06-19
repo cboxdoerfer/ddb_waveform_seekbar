@@ -803,9 +803,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
         }
         deadbeef->mutex_unlock (w->mutex_rendering);
 
-        if (!CONFIG_SHADE_WAVEFORM) {
-            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width, top, cursor_width, height);
-        }
+        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width, top, cursor_width, height);
 
         if (w->seekbar_moving && dur > 0) {
             if (w->seekbar_move_x < left) {
