@@ -113,7 +113,6 @@ typedef struct
     size_t max_buffer_len;
     size_t buffer_len;
     int channels;
-    int read;
     int nsamples;
     int seekbar_moving;
     float seekbar_moved;
@@ -908,7 +907,6 @@ waveform_draw (void *user_data, int shaded)
     float pmin = 0;
     float pmax = 0;
     float prms = 0;
-    float gain = 1.0;
 
     COLOUR color_fg, color_rms;
     if (CONFIG_SHADE_WAVEFORM == 1 && shaded == 1) {
@@ -921,14 +919,14 @@ waveform_draw (void *user_data, int shaded)
     }
 
     deadbeef->mutex_lock (w->mutex_rendering);
-    if (!w->surf || cairo_image_surface_get_width (w->surf) != width || cairo_image_surface_get_height (w->surf) != height) {
+    if (!shaded || !w->surf || cairo_image_surface_get_width (w->surf) != width || cairo_image_surface_get_height (w->surf) != height) {
         if (w->surf) {
             cairo_surface_destroy (w->surf);
             w->surf = NULL;
         }
         w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, width, height);
     }
-    if (!w->surf_shaded || cairo_image_surface_get_width (w->surf_shaded) != width || cairo_image_surface_get_height (w->surf_shaded) != height) {
+    if (shaded || !w->surf_shaded || cairo_image_surface_get_width (w->surf_shaded) != width || cairo_image_surface_get_height (w->surf_shaded) != height) {
         if (w->surf_shaded) {
             cairo_surface_destroy (w->surf_shaded);
             w->surf_shaded = NULL;
@@ -961,7 +959,6 @@ waveform_draw (void *user_data, int shaded)
     cairo_set_line_width (rms_max_cr, LINE_WIDTH);
     cairo_set_line_width (rms_min_cr, LINE_WIDTH);
 
-    float x_off;
     if (CONFIG_RENDER_METHOD == BARS) {
         cairo_set_line_width (min_cr, 1);
         cairo_set_antialias (min_cr, CAIRO_ANTIALIAS_NONE);
@@ -977,7 +974,7 @@ waveform_draw (void *user_data, int shaded)
         cairo_set_source_rgba (rms_max_cr, color_rms.r, color_rms.g, color_rms.b, 1);
     }
 
-    x_off = 0.5;
+    float x_off = 0.5;
 
     int channels = w->channels;
     int samples_size = VALUES_PER_SAMPLE * channels;
@@ -1066,12 +1063,6 @@ waveform_draw (void *user_data, int shaded)
             max /= counter;
             min /= counter;
             rms /= counter;
-
-            if (gain != 1.0) {
-                min *= gain;
-                max *= gain;
-                rms *= gain;
-            }
 
             if (CONFIG_LOG_ENABLED) {
                 if (max > 0)
@@ -1321,7 +1312,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 
                 for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
                     min = 1.0; max = -1.0; rms = 0.0;
-                    for (sample = 0; sample < samples_per_buf; sample++) {
+                    for (sample = 0; sample < sz/bytes_per_sample; sample++) {
                         if (sample * fileinfo->fmt.channels > buffer_len) {
                             fprintf (stderr, "index error!\n");
                             break;
@@ -1344,7 +1335,6 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                 waveform_db_cache (w, uri);
             }
             deadbeef->mutex_unlock (w->mutex);
-            w->read = 1;
             if (data) {
                 free (data);
             }
@@ -1389,7 +1379,6 @@ waveform_get_from_cache (gpointer user_data, const char *uri)
     deadbeef->mutex_lock (w->mutex);
     waveform_db_open (cache_path, cache_path_size);
     w->buffer_len = waveform_db_read (uri, w->buffer, w->max_buffer_len, &w->channels);
-    w->read = 1;
     waveform_db_close ();
     deadbeef->mutex_unlock (w->mutex);
 }
@@ -1509,7 +1498,6 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
 
     switch (id) {
     case DB_EV_SONGSTARTED:
-        w->read = 0;
         tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
         break;
