@@ -861,7 +861,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
 
                 clearlooks_rounded_rectangle (cr, rec_pos, (height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
                 cairo_fill (cr);
-                cairo_move_to (cr, text_pos, (height + ex.height - 3)/2);
+                cairo_move_to (cr, text_pos, (height + ex.height)/2);
                 GdkColor color_text = CONFIG_PB_COLOR;
                 color_contrast (&color_text);
                 cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
@@ -933,7 +933,6 @@ waveform_draw (void *user_data, int shaded)
         }
         w->surf_shaded = cairo_image_surface_create (CAIRO_FORMAT_RGB24, width, height);
     }
-
     deadbeef->mutex_unlock (w->mutex_rendering);
 
     cairo_surface_t *surface;
