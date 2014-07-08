@@ -73,9 +73,10 @@
 #define     CONFSTR_WF_REFRESH_INTERVAL  "waveform.refresh_interval"
 #define     CONFSTR_WF_BORDER_WIDTH      "waveform.border_width"
 #define     CONFSTR_WF_CURSOR_WIDTH      "waveform.cursor_width"
-#define     CONFSTR_WF_FONT_SIZE      "waveform.font_size"
+#define     CONFSTR_WF_FONT_SIZE         "waveform.font_size"
 #define     CONFSTR_WF_MAX_FILE_LENGTH   "waveform.max_file_length"
 #define     CONFSTR_WF_CACHE_ENABLED     "waveform.cache_enabled"
+#define     CONFSTR_WF_SCROLL_ENABLED    "waveform.scroll_enabled"
 #define     CONFSTR_WF_NUM_SAMPLES       "waveform.num_samples"
 
 
@@ -147,6 +148,7 @@ static uintptr_t mutex;
 static gboolean CONFIG_LOG_ENABLED = FALSE;
 static gboolean CONFIG_MIX_TO_MONO = FALSE;
 static gboolean CONFIG_CACHE_ENABLED = TRUE;
+static gboolean CONFIG_SCROLL_ENABLED = TRUE;
 static gboolean CONFIG_DISPLAY_RMS = TRUE;
 static gboolean CONFIG_SHADE_WAVEFORM = FALSE;
 static gboolean CONFIG_SOUNDCLOUD_STYLE = FALSE;
@@ -193,6 +195,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_REFRESH_INTERVAL,    CONFIG_REFRESH_INTERVAL);
     deadbeef->conf_set_int (CONFSTR_WF_NUM_SAMPLES,         CONFIG_NUM_SAMPLES);
     deadbeef->conf_set_int (CONFSTR_WF_CACHE_ENABLED,       CONFIG_CACHE_ENABLED);
+    deadbeef->conf_set_int (CONFSTR_WF_SCROLL_ENABLED,      CONFIG_SCROLL_ENABLED);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,          CONFIG_BG_COLOR.red);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_G,          CONFIG_BG_COLOR.green);
     deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_B,          CONFIG_BG_COLOR.blue);
@@ -228,6 +231,7 @@ load_config (void)
     CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
     CONFIG_NUM_SAMPLES = deadbeef->conf_get_int (CONFSTR_WF_NUM_SAMPLES,              2048);
     CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,          TRUE);
+    CONFIG_SCROLL_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_SCROLL_ENABLED,        TRUE);
 
     CONFIG_BG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,             50000);
     CONFIG_BG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,           50000);
@@ -1450,6 +1454,36 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
 }
 
 gboolean
+waveform_scroll_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
+{
+    w_waveform_t *w = user_data;
+    GdkEventScroll *ev = (GdkEventScroll *)event;
+    if (!CONFIG_SCROLL_ENABLED) {
+        return TRUE;
+    }
+
+    DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
+    if (trk) {
+        int duration = (int)(deadbeef->pl_get_item_duration (trk) * 1000);
+        int time = (int)(deadbeef->streamer_get_playpos () * 1000);
+        int step = CLAMP (duration / 30, 1000, 3600000);
+
+        switch (ev->direction) {
+            case GDK_SCROLL_UP:
+                deadbeef->sendmessage (DB_EV_SEEK, 0, MIN (duration, time + step), 0);
+                break;
+            case GDK_SCROLL_DOWN:
+                deadbeef->sendmessage (DB_EV_SEEK, 0, MAX (0, time - step), 0);
+                break;
+            default:
+                break;
+        }
+        deadbeef->pl_item_unref (trk);
+    }
+    return TRUE;
+}
+
+gboolean
 waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
     w_waveform_t *w = user_data;
@@ -1584,6 +1618,7 @@ w_waveform_create (void)
     g_signal_connect_after ((gpointer) w->drawarea, "configure_event", G_CALLBACK (waveform_configure_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (waveform_button_press_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "button_release_event", G_CALLBACK (waveform_button_release_event), w);
+    g_signal_connect_after ((gpointer) w->base.widget, "scroll-event", G_CALLBACK (waveform_scroll_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "motion_notify_event", G_CALLBACK (waveform_motion_notify_event), w);
     g_signal_connect_after ((gpointer) w->popup_item, "activate", G_CALLBACK (on_button_config), w);
     gtkui_plugin->w_override_signals (w->base.widget, w);
@@ -1705,6 +1740,7 @@ static const char settings_dlg[] =
     "property \"Ignore files longer than x minutes "
                 "(-1 scans every file): \"          spinbtn[-1,9999,1] "        CONFSTR_WF_MAX_FILE_LENGTH    " 180 ;\n"
     "property \"Use cache \"                        checkbox "                  CONFSTR_WF_CACHE_ENABLED        " 1 ;\n"
+    "property \"Scroll wheel to seek \"             checkbox "                  CONFSTR_WF_SCROLL_ENABLED       " 1 ;\n"
     "property \"Number of samples (per channel): \" spinbtn[2048,4092,2048] "   CONFSTR_WF_NUM_SAMPLES       " 2048 ;\n"
 ;
 
