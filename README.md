@@ -3,6 +3,18 @@
 Waveform Seekbar plugin for DeaDBeeF audio player
 ====================
 
+## Table of Contents
+
+* [Installation](#installation)
+  * [Arch Linux](#arch-linux)
+  * [Gentoo](#gentoo)
+  * [Binaries](#binaries)
+    * [Stable](#stable)
+    * [Dev](#dev)
+  * [Compilation](#compilation)
+* [Usage](#usage)
+* [Screenshots](%screenshots)
+
 ## Installation
 ### Arch Linux
 See the [AUR](https://aur.archlinux.org/packages/deadbeef-plugin-waveform-git/).
@@ -23,7 +35,7 @@ i686: ```tar -xvf ddb_waveform_seekbar_i686.tar.gz -C ~/.local/lib/deadbeef```
 
 [i686](https://drone.io/github.com/cboxdoerfer/ddb_waveform_seekbar/files/deadbeef-plugin-builder/ddb_waveform_seekbar_i686.tar.gz)
 
-### Build it yourself
+### Compilation
 You need DeaDBeeF (>=0.6) and sqlite3 and their development files
 ```bash
 make
