@@ -779,6 +779,8 @@ void
 waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
 {
     w_waveform_t *w = user_data;
+    GtkAllocation a;
+    gtk_widget_get_allocation (w->drawarea, &a);
 
     int cursor_width = CONFIG_CURSOR_WIDTH;
     float pos = 0;
@@ -806,7 +808,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
         }
         deadbeef->mutex_unlock (w->mutex_rendering);
 
-        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width, top, cursor_width, height);
+        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width - a.x, top, cursor_width, height);
 
         if (w->seekbar_moving && dur > 0) {
             if (w->seekbar_move_x < left) {
@@ -819,7 +821,10 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
                 seek_pos = w->seekbar_move_x;
             }
 
-            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, seek_pos - cursor_width, top, cursor_width, height);
+            if (cursor_width == 0) {
+                cursor_width = 1;
+            }
+            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, seek_pos - cursor_width - a.x, top, cursor_width, height);
 
             if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
                 w->seekbar_move_x_clicked = -1;
@@ -1735,7 +1740,7 @@ waveform_get_actions (DB_playItem_t *it)
 static const char settings_dlg[] =
     "property \"Refresh interval (ms): \"           spinbtn[10,1000,1] "        CONFSTR_WF_REFRESH_INTERVAL    " 33 ;\n"
     "property \"Border width: \"                    spinbtn[0,1,1] "            CONFSTR_WF_BORDER_WIDTH         " 1 ;\n"
-    "property \"Cursor width: \"                    spinbtn[1,3,1] "            CONFSTR_WF_CURSOR_WIDTH         " 3 ;\n"
+    "property \"Cursor width: \"                    spinbtn[0,3,1] "            CONFSTR_WF_CURSOR_WIDTH         " 3 ;\n"
     "property \"Font size: \"                       spinbtn[8,20,1] "           CONFSTR_WF_FONT_SIZE           " 18 ;\n"
     "property \"Ignore files longer than x minutes "
                 "(-1 scans every file): \"          spinbtn[-1,9999,1] "        CONFSTR_WF_MAX_FILE_LENGTH    " 180 ;\n"
