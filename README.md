@@ -27,9 +27,9 @@ x86_64: ```tar -xvf ddb_waveform_seekbar_x86_64.tar.gz -C ~/.local/lib/deadbeef`
 
 i686: ```tar -xvf ddb_waveform_seekbar_i686.tar.gz -C ~/.local/lib/deadbeef```
 #### Stable
-[x86_64](https://github.com/cboxdoerfer/ddb_waveform_seekbar/releases/download/v0.2/ddb_waveform_seekbar_x86_64.tar.gz)
+[x86_64](https://github.com/cboxdoerfer/ddb_waveform_seekbar/releases/download/v0.4/ddb_waveform_seekbar_x86_64.tar.gz)
 
-[i686](https://github.com/cboxdoerfer/ddb_waveform_seekbar/releases/download/v0.2/ddb_waveform_seekbar_i686.tar.gz)
+[i686](https://github.com/cboxdoerfer/ddb_waveform_seekbar/releases/download/v0.4/ddb_waveform_seekbar_i686.tar.gz)
 #### Dev
 [x86_64](https://drone.io/github.com/cboxdoerfer/ddb_waveform_seekbar/files/deadbeef-plugin-builder/ddb_waveform_seekbar_x86_64.tar.gz)
 
