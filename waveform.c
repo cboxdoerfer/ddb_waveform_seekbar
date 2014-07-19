@@ -1501,7 +1501,7 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
     w->seekbar_moving = 1;
     w->seekbar_moved = 0.0;
     w->seekbar_move_x = event->x - a.x;
-    w->seekbar_move_x_clicked = event->x;
+    w->seekbar_move_x_clicked = event->x - a.x;
     return TRUE;
 }
 
