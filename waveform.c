@@ -779,9 +779,6 @@ void
 waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
 {
     w_waveform_t *w = user_data;
-    GtkAllocation a;
-    gtk_widget_get_allocation (w->drawarea, &a);
-
     int cursor_width = CONFIG_CURSOR_WIDTH;
     float pos = 0;
     float seek_pos = 0;
@@ -797,18 +794,18 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             cairo_translate (cr, 0, 0);
             cairo_scale (cr, width/w->width, height/w->height);
             cairo_set_source_surface (cr, w->surf_shaded, 0, 0);
-            cairo_rectangle (cr, 0, 0, pos / (width/w->width), height / (height/w->height));
+            cairo_rectangle (cr, left, top, (pos - cursor_width) / (width/w->width), height / (height/w->height));
             cairo_fill (cr);
             cairo_restore (cr);
         }
         else {
             cairo_set_source_surface (cr, w->surf_shaded, 0, 0);
-            cairo_rectangle (cr, left, top, pos, height);
+            cairo_rectangle (cr, left, top, pos - cursor_width, height);
             cairo_fill (cr);
         }
         deadbeef->mutex_unlock (w->mutex_rendering);
 
-        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width - a.x, top, cursor_width, height);
+        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width, top, cursor_width, height);
 
         if (w->seekbar_moving && dur > 0) {
             if (w->seekbar_move_x < left) {
@@ -824,7 +821,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             if (cursor_width == 0) {
                 cursor_width = 1;
             }
-            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, seek_pos - cursor_width - a.x, top, cursor_width, height);
+            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, seek_pos - cursor_width, top, cursor_width, height);
 
             if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
                 w->seekbar_move_x_clicked = -1;
@@ -1451,8 +1448,11 @@ gboolean
 waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
     w_waveform_t *w = user_data;
+    GtkAllocation a;
+    gtk_widget_get_allocation (w->drawarea, &a);
+
     if (w->seekbar_moving) {
-        w->seekbar_move_x = event->x;
+        w->seekbar_move_x = event->x - a.x;
         gtk_widget_queue_draw (widget);
     }
     return TRUE;
@@ -1495,9 +1495,12 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
     if (event->button == 3) {
       return TRUE;
     }
+    GtkAllocation a;
+    gtk_widget_get_allocation (w->drawarea, &a);
+
     w->seekbar_moving = 1;
     w->seekbar_moved = 0.0;
-    w->seekbar_move_x = event->x;
+    w->seekbar_move_x = event->x - a.x;
     w->seekbar_move_x_clicked = event->x;
     return TRUE;
 }
@@ -1517,7 +1520,7 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
     if (trk) {
         GtkAllocation a;
         gtk_widget_get_allocation (w->drawarea, &a);
-        float time = (event->x) * deadbeef->pl_get_item_duration (trk) / (a.width) * 1000.f;
+        float time = (event->x - a.x) * deadbeef->pl_get_item_duration (trk) / (a.width) * 1000.f;
         if (time < 0) {
             time = 0;
         }
