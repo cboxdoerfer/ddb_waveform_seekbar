@@ -833,13 +833,8 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
                 else {
                     time = w->seekbar_move_x * dur / (width);
                 }
+                time = CLAMP (time, 0, dur);
 
-                if (time < 0) {
-                    time = 0;
-                }
-                if (time > dur) {
-                    time = dur;
-                }
                 char s[1000];
                 int hr = time/3600;
                 int mn = (time-hr*3600)/60;
