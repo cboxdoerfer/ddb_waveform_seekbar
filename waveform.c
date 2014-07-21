@@ -1317,7 +1317,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 
                 for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
                     min = 1.0; max = -1.0; rms = 0.0;
-                    for (sample = 0; sample < sz/bytes_per_sample; sample++) {
+                    for (sample = 0; sample < sz/(bytes_per_sample*fileinfo->fmt.channels); sample++) {
                         if (sample * fileinfo->fmt.channels > buffer_len) {
                             fprintf (stderr, "index error!\n");
                             break;
@@ -1327,7 +1327,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                         min = MIN (min, sample_val);
                         rms += (sample_val * sample_val);
                     }
-                    rms /= samples_per_buf * fileinfo->fmt.channels;
+                    rms /= sample;
                     rms = sqrt (rms);
                     w->buffer[counter] = (short)(max*1000);
                     w->buffer[counter+1] = (short)(min*1000);
