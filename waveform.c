@@ -44,7 +44,6 @@
 
 //#define M_PI (3.1415926535897932384626433832795029)
 #define LINE_WIDTH   (1.0)
-#define BORDER_WIDTH (1)
 // min, max, rms
 #define VALUES_PER_SAMPLE (3)
 #define MAX_CHANNELS (6)
@@ -124,7 +123,6 @@ typedef struct
     wavedata_t *wave;
     size_t max_buffer_len;
     int seekbar_moving;
-    float seekbar_moved;
     float seekbar_move_x;
     float seekbar_move_x_clicked;
     float height;
@@ -847,15 +845,9 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
 
             if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
                 w->seekbar_move_x_clicked = -1;
-                float time = 0;
 
-                if (w->seekbar_moved > 0) {
-                    time = deadbeef->streamer_get_playpos ();
-                }
-                else {
-                    time = w->seekbar_move_x * dur / (width);
-                }
-                time = CLAMP (time, 0, dur);
+                float time = 0;
+                time = CLAMP (w->seekbar_move_x * dur / (width), 0, dur);
 
                 char s[1000];
                 int hr = time/3600;
@@ -1530,7 +1522,6 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
     gtk_widget_get_allocation (w->drawarea, &a);
 
     w->seekbar_moving = 1;
-    w->seekbar_moved = 0.0;
     w->seekbar_move_x = event->x - a.x;
     w->seekbar_move_x_clicked = event->x - a.x;
     return TRUE;
@@ -1546,7 +1537,6 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
     }
     w->seekbar_moving = 0;
     w->seekbar_move_x_clicked = 0;
-    w->seekbar_moved = 1.0;
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
         GtkAllocation a;
@@ -1615,7 +1605,6 @@ w_waveform_init (ddb_gtkui_widget_t *w)
     wf->surf_shaded = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
     deadbeef->mutex_unlock (wf->mutex);
     wf->seekbar_moving = 0;
-    wf->seekbar_moved = 0;
     wf->height = a.height;
     wf->width = a.width;
 
