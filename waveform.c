@@ -1586,7 +1586,13 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
         break;
-    case DB_EV_SONGCHANGED:
+    case DB_EV_STOP:
+        deadbeef->mutex_lock (mutex);
+        memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
+        w->wave->data_len = 0;
+        w->wave->channels = 0;
+        deadbeef->mutex_unlock (mutex);
+        g_idle_add (waveform_redraw_cb, w);
         break;
     case DB_EV_CONFIGCHANGED:
         on_config_changed (w);
