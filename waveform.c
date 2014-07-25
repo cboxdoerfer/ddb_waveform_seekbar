@@ -723,7 +723,6 @@ w_waveform_destroy (ddb_gtkui_widget_t *widget)
     w_waveform_t *w = (w_waveform_t *)widget;
     deadbeef->mutex_lock (w->mutex);
     waveform_db_close ();
-    deadbeef->mutex_unlock (w->mutex);
     if (w->drawtimer) {
         g_source_remove (w->drawtimer);
         w->drawtimer = 0;
@@ -752,6 +751,7 @@ w_waveform_destroy (ddb_gtkui_widget_t *widget)
         free (w->wave);
         w->wave = NULL;
     }
+    deadbeef->mutex_unlock (w->mutex);
     if (w->mutex) {
         deadbeef->mutex_free (w->mutex);
         w->mutex = 0;
@@ -846,8 +846,7 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
                 w->seekbar_move_x_clicked = -1;
 
-                float time = 0;
-                time = CLAMP (w->seekbar_move_x * dur / (width), 0, dur);
+                float time = CLAMP (w->seekbar_move_x * dur / (width), 0, dur);
 
                 char s[1000];
                 int hr = time/3600;
