@@ -1372,9 +1372,9 @@ void
 waveform_get_from_cache (gpointer user_data, const char *uri)
 {
     w_waveform_t *w = user_data;
-    deadbeef->mutex_lock (mutex);
+    deadbeef->mutex_lock (w->mutex);
     w->wave->data_len = waveform_db_read (uri, w->wave->data, w->max_buffer_len, &w->wave->channels);
-    deadbeef->mutex_unlock (mutex);
+    deadbeef->mutex_unlock (w->mutex);
 }
 
 void
@@ -1403,11 +1403,11 @@ waveform_get_wavedata (gpointer user_data)
 
                 DB_playItem_t *playing = deadbeef->streamer_get_playing_track ();
                 if (playing && it && it == playing) {
-                    deadbeef->mutex_lock (mutex);
+                    deadbeef->mutex_lock (w->mutex);
                     memcpy (w->wave->data, wavedata->data, wavedata->data_len * sizeof (short));
                     w->wave->data_len = wavedata->data_len;
                     w->wave->channels = wavedata->channels;
-                    deadbeef->mutex_unlock (mutex);
+                    deadbeef->mutex_unlock (w->mutex);
                     g_idle_add (waveform_redraw_cb, w);
                 }
                 if (playing) {
@@ -1560,22 +1560,22 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
     switch (id) {
     case DB_EV_SONGSTARTED:
         //ddb_event_track_t *ev (ddb_event_track_t *)ctx;
-        deadbeef->mutex_lock (mutex);
+        deadbeef->mutex_lock (w->mutex);
         memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
         w->wave->data_len = 0;
         w->wave->channels = 0;
-        deadbeef->mutex_unlock (mutex);
+        deadbeef->mutex_unlock (w->mutex);
         //queue_add (deadbeef->pl_find_meta_raw (ev->track, ":URI"));
         g_idle_add (waveform_redraw_cb, w);
         tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
         break;
     case DB_EV_STOP:
-        deadbeef->mutex_lock (mutex);
+        deadbeef->mutex_lock (w->mutex);
         memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
         w->wave->data_len = 0;
         w->wave->channels = 0;
-        deadbeef->mutex_unlock (mutex);
+        deadbeef->mutex_unlock (w->mutex);
         g_idle_add (waveform_redraw_cb, w);
         break;
     case DB_EV_CONFIGCHANGED:
