@@ -36,7 +36,7 @@ GTK3_LIBS?=`pkg-config --libs gtk+-3.0`
 SQLITE_LIBS?=-lsqlite3
 
 CC?=gcc
-CFLAGS+=-Wall -fPIC -std=c99 -D_GNU_SOURCE
+CFLAGS+=-Wall -g -fPIC -std=c99 -D_GNU_SOURCE
 LDFLAGS+=-shared
 
 GTK2_DIR?=gtk2

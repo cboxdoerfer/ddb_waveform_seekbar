@@ -1593,7 +1593,6 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         break;
     case DB_EV_CONFIGCHANGED:
         on_config_changed (w);
-
         break;
     }
     return 0;
