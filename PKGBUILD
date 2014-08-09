@@ -1,12 +1,12 @@
 pkgname=deadbeef-plugin-waveform-git
-pkgver=20140801
+pkgver=20140803
 pkgrel=1
 pkgdesc="Waveform Seekbar Plugin for the DeaDBeeF audio player (development version)"
 url="https://github.com/cboxdoerfer/ddb_waveform_seekbar"
 arch=('i686' 'x86_64')
 license='GPL2'
-depends=('deadbeef' 'sqlite')
-makedepends=('git')
+depends=('deadbeef' 'sqlite' 'gtk2')
+makedepends=('git' 'pkg-config')
 conflicts=('deadbeef-plugin-waveform')
 
 _gitname=ddb_waveform_seekbar
@@ -43,3 +43,4 @@ package() {
   install -D -v -c $srcdir/$_gitname-build/gtk2/ddb_misc_waveform_GTK2.so $pkgdir/usr/lib/deadbeef/ddb_misc_waveform_GTK2.so
   install -D -v -c $srcdir/$_gitname-build/gtk3/ddb_misc_waveform_GTK3.so $pkgdir/usr/lib/deadbeef/ddb_misc_waveform_GTK3.so
 }
+

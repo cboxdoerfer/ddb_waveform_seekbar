@@ -613,6 +613,24 @@ make_cache_dir (char *path, int size)
     return sz;
 }
 
+static char *
+waveform_format_uri (DB_playItem_t *it, const char *uri)
+{
+    if (!it || !uri) {
+        return NULL;
+    }
+    int key_len = strlen (uri) + 10;
+    char *key = malloc (key_len);
+    if (deadbeef->pl_get_item_flags (it) & DDB_IS_SUBTRACK) {
+        int subtrack = deadbeef->pl_find_meta_int (it, ":TRACKNUM", 0);
+        snprintf (key, key_len, "%d%s", subtrack, uri);
+    }
+    else {
+        snprintf (key, key_len, "%s", uri);
+    }
+    return key;
+}
+
 /* copied from ardour3 */
 static inline float
 _log_meter (float power, double lower_db, double upper_db, double non_linearity)
@@ -1201,12 +1219,19 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
 }
 
 void
-waveform_db_cache (gpointer user_data, wavedata_t *wavedata)
+waveform_db_cache (gpointer user_data, DB_playItem_t *it, wavedata_t *wavedata)
 {
     w_waveform_t *w = user_data;
+    char *key = waveform_format_uri (it, wavedata->fname);
+    if (!key) {
+        return;
+    }
     deadbeef->mutex_lock (w->mutex);
-    waveform_db_write (wavedata->fname, wavedata->data, wavedata->data_len * sizeof (short), wavedata->channels, 0);
+    waveform_db_write (key, wavedata->data, wavedata->data_len * sizeof (short), wavedata->channels, 0);
     deadbeef->mutex_unlock (w->mutex);
+    if (key) {
+        free (key);
+    }
 }
 
 int
@@ -1337,6 +1362,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
             wavedata->fname = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
             wavedata->data_len = counter;
             wavedata->channels = fileinfo->fmt.channels;
+
             if (data) {
                 free (data);
             }
@@ -1355,26 +1381,47 @@ out:
 }
 
 int
-waveform_delete (const char *uri)
+waveform_delete (DB_playItem_t *it, const char *uri)
 {
-    int result = waveform_db_delete (uri);
+    char *key = waveform_format_uri (it, uri);
+    if (!key) {
+        return 0;
+    }
+    int result = waveform_db_delete (key);
+    if (key) {
+        free (key);
+    }
     return result;
 }
 
 int
-waveform_cached (const char *uri)
+waveform_cached (DB_playItem_t *it, const char *uri)
 {
-    int result = waveform_db_cached (uri);
+    char *key = waveform_format_uri (it, uri);
+    if (!key) {
+        return 0;
+    }
+    int result = waveform_db_cached (key);
+    if (key) {
+        free (key);
+    }
     return result;
 }
 
 void
-waveform_get_from_cache (gpointer user_data, const char *uri)
+waveform_get_from_cache (gpointer user_data, DB_playItem_t *it, const char *uri)
 {
     w_waveform_t *w = user_data;
+    char *key = waveform_format_uri (it, uri);
+    if (!key) {
+        return;
+    }
     deadbeef->mutex_lock (w->mutex);
-    w->wave->data_len = waveform_db_read (uri, w->wave->data, w->max_buffer_len, &w->wave->channels);
+    w->wave->data_len = waveform_db_read (key, w->wave->data, w->max_buffer_len, &w->wave->channels);
     deadbeef->mutex_unlock (w->mutex);
+    if (key) {
+        free (key);
+    }
 }
 
 void
@@ -1386,8 +1433,8 @@ waveform_get_wavedata (gpointer user_data)
     if (it) {
         char *uri = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
         if (uri && waveform_valid_track (it, uri)) {
-            if (CONFIG_CACHE_ENABLED && waveform_cached (uri)) {
-                waveform_get_from_cache (w, uri);
+            if (CONFIG_CACHE_ENABLED && waveform_cached (it, uri)) {
+                waveform_get_from_cache (w, it, uri);
                 g_idle_add (waveform_redraw_cb, w);
             }
             else {
@@ -1398,7 +1445,7 @@ waveform_get_wavedata (gpointer user_data)
 
                 waveform_generate_wavedata (w, it, uri, wavedata);
                 if (CONFIG_CACHE_ENABLED) {
-                    waveform_db_cache (w, wavedata);
+                    waveform_db_cache (w, it, wavedata);
                 }
 
                 DB_playItem_t *playing = deadbeef->streamer_get_playing_track ();
@@ -1409,8 +1456,7 @@ waveform_get_wavedata (gpointer user_data)
                     w->wave->channels = wavedata->channels;
                     deadbeef->mutex_unlock (w->mutex);
                     g_idle_add (waveform_redraw_cb, w);
-                }
-                if (playing) {
+
                     deadbeef->pl_item_unref (playing);
                 }
 
@@ -1728,8 +1774,8 @@ waveform_action_lookup (DB_plugin_action_t *action, int ctx)
             while (it) {
                 if (deadbeef->pl_is_selected (it)) {
                     const char *uri = deadbeef->pl_find_meta_raw (it, ":URI");
-                    if (waveform_cached (uri)) {
-                        waveform_delete (uri);
+                    if (waveform_cached (it, uri)) {
+                        waveform_delete (it, uri);
                     }
                 }
                 DB_playItem_t *next = deadbeef->pl_get_next (it, PL_MAIN);
@@ -1761,7 +1807,7 @@ waveform_get_actions (DB_playItem_t *it)
     lookup_action.flags |= DB_ACTION_DISABLED;
     DB_playItem_t *current = deadbeef->pl_get_first (PL_MAIN);
     while (current) {
-        if (deadbeef->pl_is_selected (current) && waveform_cached (deadbeef->pl_find_meta_raw (current, ":URI"))) {
+        if (deadbeef->pl_is_selected (current) && waveform_cached (current, deadbeef->pl_find_meta_raw (current, ":URI"))) {
             lookup_action.flags &= ~DB_ACTION_DISABLED;
             deadbeef->pl_item_unref (current);
             break;
