@@ -596,7 +596,7 @@ static int
 make_cache_dir (char *path, int size)
 {
     const char *cache = getenv ("XDG_CACHE_HOME");
-    if (strcmp(cache, "") == 0) {
+    if (cache && strcmp(cache, "") == 0) {
         cache = NULL;
     }
     int sz;
