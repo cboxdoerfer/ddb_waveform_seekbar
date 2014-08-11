@@ -608,6 +608,9 @@ static int
 make_cache_dir (char *path, int size)
 {
     const char *cache = getenv ("XDG_CACHE_HOME");
+    if (cache && strcmp(cache, "") == 0) {
+        cache = NULL;
+    }
     const int sz = snprintf (path, size, cache ? "%s/deadbeef/waveform/" : "%s/.cache/deadbeef/waveform/", cache ? cache : getenv ("HOME"));
     if (!check_dir (path, 0755)) {
         return 0;
