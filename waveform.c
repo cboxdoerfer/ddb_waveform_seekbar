@@ -131,7 +131,7 @@ typedef struct
     intptr_t mutex_rendering;
     cairo_surface_t *surf;
     cairo_surface_t *surf_shaded;
-} w_waveform_t;
+} waveform_t;
 
 typedef struct cache_query_s
 {
@@ -182,7 +182,7 @@ waveform_draw_cb (void *user_data);
 static gboolean
 waveform_redraw_cb (void *user_data);
 
-void
+static void
 waveform_draw (void *user_data, int shaded);
 
 static void
@@ -263,16 +263,19 @@ load_config (void)
 
     render =
     (RENDER) {
-        /*foreground*/  { CONFIG_FG_COLOR.red/65535.f,CONFIG_FG_COLOR.green/65535.f,CONFIG_FG_COLOR.blue/65535.f, CONFIG_FG_ALPHA/65535.f },
-        /*wave-rms*/    { CONFIG_FG_RMS_COLOR.red/65535.f,CONFIG_FG_RMS_COLOR.green/65535.f,CONFIG_FG_RMS_COLOR.blue/65535.f, CONFIG_FG_RMS_ALPHA/65535.f },
-        /*background*/  { CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,CONFIG_BG_COLOR.blue/65535.f, CONFIG_BG_ALPHA/65535.f },
+        /*foreground*/  { CONFIG_FG_COLOR.red/65535.f,CONFIG_FG_COLOR.green/65535.f,
+                          CONFIG_FG_COLOR.blue/65535.f, CONFIG_FG_ALPHA/65535.f },
+        /*wave-rms*/    { CONFIG_FG_RMS_COLOR.red/65535.f,CONFIG_FG_RMS_COLOR.green/65535.f,
+                          CONFIG_FG_RMS_COLOR.blue/65535.f, CONFIG_FG_RMS_ALPHA/65535.f },
+        /*background*/  { CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,
+                          CONFIG_BG_COLOR.blue/65535.f, CONFIG_BG_ALPHA/65535.f },
     };
 }
 
 static int
 on_config_changed (void *widget)
 {
-    w_waveform_t *w = (w_waveform_t *) widget;
+    waveform_t *w = (waveform_t *) widget;
     load_config ();
     // enable/disable border
     switch (CONFIG_BORDER_WIDTH) {
@@ -530,7 +533,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     return;
 }
 
-void
+static void
 queue_add (const char *fname)
 {
     deadbeef->mutex_lock (mutex);
@@ -556,7 +559,7 @@ queue_add (const char *fname)
     deadbeef->mutex_unlock (mutex);
 }
 
-void
+static void
 queue_pop (void)
 {
     deadbeef->mutex_lock (mutex);
@@ -605,8 +608,7 @@ static int
 make_cache_dir (char *path, int size)
 {
     const char *cache = getenv ("XDG_CACHE_HOME");
-    int sz;
-    sz = snprintf (path, size, cache ? "%s/deadbeef/waveform/" : "%s/.cache/deadbeef/waveform/", cache ? cache : getenv ("HOME"));
+    const int sz = snprintf (path, size, cache ? "%s/deadbeef/waveform/" : "%s/.cache/deadbeef/waveform/", cache ? cache : getenv ("HOME"));
     if (!check_dir (path, 0755)) {
         return 0;
     }
@@ -619,7 +621,7 @@ waveform_format_uri (DB_playItem_t *it, const char *uri)
     if (!it || !uri) {
         return NULL;
     }
-    int key_len = strlen (uri) + 10;
+    const int key_len = strlen (uri) + 10;
     char *key = malloc (key_len);
     if (deadbeef->pl_get_item_flags (it) & DDB_IS_SUBTRACK) {
         int subtrack = deadbeef->pl_find_meta_int (it, ":TRACKNUM", 0);
@@ -735,59 +737,10 @@ draw_cairo_rectangle (cairo_t *cr, const GdkColor *c, int alpha, float x, int y,
     cairo_fill (cr);
 }
 
-void
-w_waveform_destroy (ddb_gtkui_widget_t *widget)
-{
-    w_waveform_t *w = (w_waveform_t *)widget;
-    deadbeef->mutex_lock (w->mutex);
-    waveform_db_close ();
-    if (w->drawtimer) {
-        g_source_remove (w->drawtimer);
-        w->drawtimer = 0;
-    }
-    if (w->resizetimer) {
-        g_source_remove (w->resizetimer);
-        w->resizetimer = 0;
-    }
-    if (w->surf) {
-        cairo_surface_destroy (w->surf);
-        w->surf = NULL;
-    }
-    if (w->surf_shaded) {
-        cairo_surface_destroy (w->surf_shaded);
-        w->surf_shaded = NULL;
-    }
-    if (w->wave->data) {
-        free (w->wave->data);
-        w->wave->data = NULL;
-    }
-    if (w->wave->fname) {
-        free (w->wave->fname);
-        w->wave->fname = NULL;
-    }
-    if (w->wave) {
-        free (w->wave);
-        w->wave = NULL;
-    }
-    deadbeef->mutex_unlock (w->mutex);
-    if (w->mutex) {
-        deadbeef->mutex_free (w->mutex);
-        w->mutex = 0;
-    }
-    if (w->mutex_rendering) {
-        deadbeef->mutex_free (w->mutex_rendering);
-        w->mutex_rendering = 0;
-    }
-    if (mutex) {
-        deadbeef->mutex_free (mutex);
-        mutex = 0;
-    }
-}
-
 static gboolean
 waveform_draw_cb (void *user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     gtk_widget_queue_draw (w->drawarea);
     return TRUE;
 }
@@ -795,7 +748,7 @@ waveform_draw_cb (void *user_data)
 static gboolean
 waveform_redraw_cb (void *user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     waveform_draw (w, 0);
     waveform_draw (w, 1);
     gtk_widget_queue_draw (w->drawarea);
@@ -813,18 +766,17 @@ waveform_redraw_cb (void *user_data)
 //    return FALSE;
 //}
 
-void
+static void
 waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
 {
-    w_waveform_t *w = user_data;
-    int cursor_width = CONFIG_CURSOR_WIDTH;
-    float pos = 0;
-    float seek_pos = 0;
+    waveform_t *w = user_data;
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
-        float dur = deadbeef->pl_get_item_duration (trk);
-        pos = (deadbeef->streamer_get_playpos () * width)/ dur + left;
+        const float dur = deadbeef->pl_get_item_duration (trk);
+        const float pos = (deadbeef->streamer_get_playpos () * width)/ dur + left;
+        float seek_pos = 0;
+        int cursor_width = CONFIG_CURSOR_WIDTH;
 
         deadbeef->mutex_lock (w->mutex_rendering);
         if (height != w->height || width != w->width) {
@@ -864,12 +816,12 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
                 w->seekbar_move_x_clicked = -1;
 
-                float time = CLAMP (w->seekbar_move_x * dur / (width), 0, dur);
+                const float time = CLAMP (w->seekbar_move_x * dur / (width), 0, dur);
+                const int hr = time/3600;
+                const int mn = (time-hr*3600)/60;
+                const int sc = time-hr*3600-mn*60;
 
                 char s[1000];
-                int hr = time/3600;
-                int mn = (time-hr*3600)/60;
-                int sc = time-hr*3600-mn*60;
                 snprintf (s, sizeof (s), "%02d:%02d:%02d", hr, mn, sc);
 
                 cairo_save (cr);
@@ -879,8 +831,8 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
                 cairo_text_extents_t ex;
                 cairo_text_extents (cr, s, &ex);
 
-                int rec_width = ex.width + 10;
-                int rec_height = ex.height + 10;
+                const int rec_width = ex.width + 10;
+                const int rec_height = ex.height + 10;
                 int rec_pos = seek_pos - rec_width;
                 int text_pos = rec_pos + 5;
 
@@ -908,8 +860,8 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             cairo_set_font_size (cr, CONFIG_FONT_SIZE);
             cairo_text_extents_t ex;
             cairo_text_extents (cr, text, &ex);
-            int text_x = (width - ex.width)/2;
-            int text_y = (height + ex.height - 3)/2;
+            const int text_x = (width - ex.width)/2;
+            const int text_y = (height + ex.height - 3)/2;
             cairo_move_to (cr, text_x, text_y);
             GdkColor color_text = CONFIG_BG_COLOR;
             color_contrast (&color_text);
@@ -921,24 +873,20 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
     }
 }
 
-void
+static void
 waveform_draw (void *user_data, int shaded)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
 
-    double width = a.width;
-    double height = a.height;
+    const double width = a.width;
+    const double height = a.height;
+    const double left = 0;
     double waveform_height = height * 0.9;
-    double left = 0;
     double top = (height - waveform_height)/2;
     w->width = width;
     w->height = height;
-
-    float pmin = 0;
-    float pmax = 0;
-    float prms = 0;
 
     COLOUR color_fg, color_rms;
     if (CONFIG_SHADE_WAVEFORM == 1 && shaded == 1) {
@@ -1004,7 +952,7 @@ waveform_draw (void *user_data, int shaded)
         cairo_set_source_rgba (rms_max_cr, color_rms.r, color_rms.g, color_rms.b, 1);
     }
 
-    float x_off = 0.5;
+    const float x_off = 0.5;
 
     int channels = w->wave->channels;
     int samples_size = VALUES_PER_SAMPLE * channels;
@@ -1031,18 +979,16 @@ waveform_draw (void *user_data, int shaded)
         top = (height - waveform_height)/2;
     }
 
-    int samples_per_buf_temp = samples_per_buf;
-    int offset;
-    int f_offset;
+    const int samples_per_buf_temp = samples_per_buf;
     float min, max, rms;
+    float pmin = 0;
+    float pmax = 0;
+    float prms = 0;
 
     for (int ch = 0; ch < channels; ch++, top += (height / channels)) {
         if (w->wave->channels == 0) {
             break;
         }
-        f_offset = 0;
-        offset = ch * VALUES_PER_SAMPLE;
-        samples_per_buf = samples_per_buf_temp;
 
         double center;
         if (CONFIG_SOUNDCLOUD_STYLE) {
@@ -1075,6 +1021,9 @@ waveform_draw (void *user_data, int shaded)
             }
         }
 
+        int offset = ch * VALUES_PER_SAMPLE;
+        int f_offset = 0;
+        samples_per_buf = samples_per_buf_temp;
         for (int x = 0; x < width; x++) {
             if (offset + samples_per_buf > w->wave->data_len) {
                 break;
@@ -1083,7 +1032,7 @@ waveform_draw (void *user_data, int shaded)
             min = 0.0; max = 0.0; rms = 0.0;
 
             int counter = 0;
-            int offset_temp = offset;
+            const int offset_temp = offset;
             for (; offset < offset_temp + samples_per_buf; offset += samples_size, counter++) {
                 max += (float)w->wave->data[offset]/1000;
                 min += (float)w->wave->data[offset+1]/1000;
@@ -1197,10 +1146,10 @@ waveform_draw (void *user_data, int shaded)
     return;
 }
 
-void
+static void
 waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int height)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
 
     deadbeef->mutex_lock (w->mutex_rendering);
     if (height != w->height || width != w->width) {
@@ -1218,48 +1167,11 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
     deadbeef->mutex_unlock (w->mutex_rendering);
 }
 
-void
-waveform_db_cache (gpointer user_data, DB_playItem_t *it, wavedata_t *wavedata)
-{
-    w_waveform_t *w = user_data;
-    char *key = waveform_format_uri (it, wavedata->fname);
-    if (!key) {
-        return;
-    }
-    deadbeef->mutex_lock (w->mutex);
-    waveform_db_write (key, wavedata->data, wavedata->data_len * sizeof (short), wavedata->channels, 0);
-    deadbeef->mutex_unlock (w->mutex);
-    if (key) {
-        free (key);
-    }
-}
-
-int
-waveform_valid_track (DB_playItem_t *it, const char *uri)
-{
-    if (!deadbeef->is_local_file (uri)) {
-        return 0;
-    }
-    if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != -1) {
-        return 0;
-    }
-
-    deadbeef->pl_lock ();
-    const char *file_meta = deadbeef->pl_find_meta_raw (it, ":FILETYPE");
-    if (file_meta && strcmp (file_meta,"cdda") == 0) {
-        deadbeef->pl_unlock ();
-        return 0;
-    }
-    deadbeef->pl_unlock ();
-    return 1;
-}
-
-gboolean
+static gboolean
 waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *uri, wavedata_t *wavedata)
 {
-    w_waveform_t *w = user_data;
-    double width = CONFIG_NUM_SAMPLES;
-    long buffer_len;
+    waveform_t *w = user_data;
+    const double width = CONFIG_NUM_SAMPLES;
 
     DB_fileinfo_t *fileinfo = NULL;
 
@@ -1294,9 +1206,9 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
             const int nsamples_per_channel = (int)deadbeef->pl_get_item_duration (it) * fileinfo->fmt.samplerate;
             const int samples_per_buf = floorf ((float) nsamples_per_channel / (float) width);
             const int max_samples_per_buf = 1 + samples_per_buf;
+            const int bytes_per_sample = fileinfo->fmt.bps / 8;
+            const int samplesize = fileinfo->fmt.channels * bytes_per_sample;
 
-            int bytes_per_sample = fileinfo->fmt.bps / 8;
-            int samplesize = fileinfo->fmt.channels * bytes_per_sample;
             data = malloc (sizeof (float) * max_samples_per_buf * samplesize);
             if (!data) {
                 trace ("waveform: out of memory.\n");
@@ -1311,7 +1223,6 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
             }
             memset (buffer, 0, sizeof (float) * max_samples_per_buf * samplesize);
 
-            buffer_len = samples_per_buf * samplesize;
 
             ddb_waveformat_t out_fmt = {
                 .bps = 32,
@@ -1324,6 +1235,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 
             int eof = 0;
             int counter = 0;
+            const long buffer_len = samples_per_buf * samplesize;
             while (!eof) {
                 int sz = dec->read (fileinfo, (char *)buffer, buffer_len);
                 if (sz != buffer_len) {
@@ -1337,9 +1249,8 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 
                 int sample;
                 float min, max, rms;
-                int ch;
 
-                for (ch = 0; ch < fileinfo->fmt.channels; ch++) {
+                for (int ch = 0; ch < fileinfo->fmt.channels; ch++) {
                     min = 1.0; max = -1.0; rms = 0.0;
                     for (sample = 0; sample < sz/(bytes_per_sample*fileinfo->fmt.channels); sample++) {
                         if (sample * fileinfo->fmt.channels > buffer_len) {
@@ -1380,7 +1291,43 @@ out:
     return TRUE;
 }
 
-int
+static void
+waveform_db_cache (gpointer user_data, DB_playItem_t *it, wavedata_t *wavedata)
+{
+    waveform_t *w = user_data;
+    char *key = waveform_format_uri (it, wavedata->fname);
+    if (!key) {
+        return;
+    }
+    deadbeef->mutex_lock (w->mutex);
+    waveform_db_write (key, wavedata->data, wavedata->data_len * sizeof (short), wavedata->channels, 0);
+    deadbeef->mutex_unlock (w->mutex);
+    if (key) {
+        free (key);
+    }
+}
+
+static int
+waveform_valid_track (DB_playItem_t *it, const char *uri)
+{
+    if (!deadbeef->is_local_file (uri)) {
+        return 0;
+    }
+    if (deadbeef->pl_get_item_duration (it)/60 >= CONFIG_MAX_FILE_LENGTH && CONFIG_MAX_FILE_LENGTH != -1) {
+        return 0;
+    }
+
+    deadbeef->pl_lock ();
+    const char *file_meta = deadbeef->pl_find_meta_raw (it, ":FILETYPE");
+    if (file_meta && strcmp (file_meta,"cdda") == 0) {
+        deadbeef->pl_unlock ();
+        return 0;
+    }
+    deadbeef->pl_unlock ();
+    return 1;
+}
+
+static int
 waveform_delete (DB_playItem_t *it, const char *uri)
 {
     char *key = waveform_format_uri (it, uri);
@@ -1394,8 +1341,8 @@ waveform_delete (DB_playItem_t *it, const char *uri)
     return result;
 }
 
-int
-waveform_cached (DB_playItem_t *it, const char *uri)
+static int
+waveform_is_cached (DB_playItem_t *it, const char *uri)
 {
     char *key = waveform_format_uri (it, uri);
     if (!key) {
@@ -1408,10 +1355,10 @@ waveform_cached (DB_playItem_t *it, const char *uri)
     return result;
 }
 
-void
+static void
 waveform_get_from_cache (gpointer user_data, DB_playItem_t *it, const char *uri)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     char *key = waveform_format_uri (it, uri);
     if (!key) {
         return;
@@ -1424,16 +1371,16 @@ waveform_get_from_cache (gpointer user_data, DB_playItem_t *it, const char *uri)
     }
 }
 
-void
+static void
 waveform_get_wavedata (gpointer user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     deadbeef->background_job_increment ();
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     if (it) {
         char *uri = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
         if (uri && waveform_valid_track (it, uri)) {
-            if (CONFIG_CACHE_ENABLED && waveform_cached (it, uri)) {
+            if (CONFIG_CACHE_ENABLED && waveform_is_cached (it, uri)) {
                 waveform_get_from_cache (w, it, uri);
                 g_idle_add (waveform_redraw_cb, w);
             }
@@ -1484,27 +1431,27 @@ waveform_get_wavedata (gpointer user_data)
     deadbeef->background_job_decrement ();
 }
 
-void
+static void
 waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
 
-    int x = 0;
-    int y = 0;
-    int width = a.width;
-    int height = a.height;
+    const int x = 0;
+    const int y = 0;
+    const int width = a.width;
+    const int height = a.height;
     waveform_scale (w, cr, x, y, width, height);
     waveform_seekbar_draw (w, cr, x, y, width, height);
     cairo_destroy (cr);
 }
 
-gboolean
+static gboolean
 waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     if (w->resizetimer) {
         g_source_remove (w->resizetimer);
     }
@@ -1512,10 +1459,10 @@ waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data
     return FALSE;
 }
 
-gboolean
+static gboolean
 waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
 
@@ -1526,10 +1473,10 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
     return TRUE;
 }
 
-gboolean
+static gboolean
 waveform_scroll_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     GdkEventScroll *ev = (GdkEventScroll *)event;
     if (!CONFIG_SCROLL_ENABLED) {
         return TRUE;
@@ -1537,9 +1484,9 @@ waveform_scroll_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
-        int duration = (int)(deadbeef->pl_get_item_duration (trk) * 1000);
-        int time = (int)(deadbeef->streamer_get_playpos () * 1000);
-        int step = CLAMP (duration / 30, 1000, 3600000);
+        const int duration = (int)(deadbeef->pl_get_item_duration (trk) * 1000);
+        const int time = (int)(deadbeef->streamer_get_playpos () * 1000);
+        const int step = CLAMP (duration / 30, 1000, 3600000);
 
         switch (ev->direction) {
             case GDK_SCROLL_UP:
@@ -1556,10 +1503,10 @@ waveform_scroll_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
     return TRUE;
 }
 
-gboolean
+static gboolean
 waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     if (event->button == 3) {
       return TRUE;
     }
@@ -1572,10 +1519,10 @@ waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer 
     return TRUE;
 }
 
-gboolean
+static gboolean
 waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
-    w_waveform_t *w = user_data;
+    waveform_t *w = user_data;
     if (event->button == 3) {
       gtk_menu_popup (GTK_MENU (w->popup), NULL, NULL, NULL, w->drawarea, 0, gtk_get_current_event_time ());
       return TRUE;
@@ -1600,7 +1547,7 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
 static int
 waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2)
 {
-    w_waveform_t *w = (w_waveform_t *)widget;
+    waveform_t *w = (waveform_t *)widget;
     intptr_t tid;
 
     switch (id) {
@@ -1631,10 +1578,59 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
     return 0;
 }
 
-void
-w_waveform_init (ddb_gtkui_widget_t *w)
+static void
+waveform_destroy (ddb_gtkui_widget_t *widget)
 {
-    w_waveform_t *wf = (w_waveform_t *)w;
+    waveform_t *w = (waveform_t *)widget;
+    deadbeef->mutex_lock (w->mutex);
+    waveform_db_close ();
+    if (w->drawtimer) {
+        g_source_remove (w->drawtimer);
+        w->drawtimer = 0;
+    }
+    if (w->resizetimer) {
+        g_source_remove (w->resizetimer);
+        w->resizetimer = 0;
+    }
+    if (w->surf) {
+        cairo_surface_destroy (w->surf);
+        w->surf = NULL;
+    }
+    if (w->surf_shaded) {
+        cairo_surface_destroy (w->surf_shaded);
+        w->surf_shaded = NULL;
+    }
+    if (w->wave->data) {
+        free (w->wave->data);
+        w->wave->data = NULL;
+    }
+    if (w->wave->fname) {
+        free (w->wave->fname);
+        w->wave->fname = NULL;
+    }
+    if (w->wave) {
+        free (w->wave);
+        w->wave = NULL;
+    }
+    deadbeef->mutex_unlock (w->mutex);
+    if (w->mutex) {
+        deadbeef->mutex_free (w->mutex);
+        w->mutex = 0;
+    }
+    if (w->mutex_rendering) {
+        deadbeef->mutex_free (w->mutex_rendering);
+        w->mutex_rendering = 0;
+    }
+    if (mutex) {
+        deadbeef->mutex_free (mutex);
+        mutex = 0;
+    }
+}
+
+static void
+waveform_init (ddb_gtkui_widget_t *w)
+{
+    waveform_t *wf = (waveform_t *)w;
     GtkAllocation a;
     gtk_widget_get_allocation (wf->drawarea, &a);
     load_config ();
@@ -1675,14 +1671,14 @@ w_waveform_init (ddb_gtkui_widget_t *w)
 }
 
 static ddb_gtkui_widget_t *
-w_waveform_create (void)
+waveform_create (void)
 {
-    w_waveform_t *w = malloc (sizeof (w_waveform_t));
-    memset (w, 0, sizeof (w_waveform_t));
+    waveform_t *w = malloc (sizeof (waveform_t));
+    memset (w, 0, sizeof (waveform_t));
 
     w->base.widget = gtk_event_box_new ();
-    w->base.init = w_waveform_init;
-    w->base.destroy = w_waveform_destroy;
+    w->base.init = waveform_init;
+    w->base.destroy = waveform_destroy;
     w->base.message = waveform_message;
     w->drawarea = gtk_drawing_area_new ();
     w->frame = gtk_frame_new (NULL);
@@ -1714,7 +1710,7 @@ w_waveform_create (void)
     return (ddb_gtkui_widget_t *)w;
 }
 
-int
+static int
 waveform_connect (void)
 {
     gtkui_plugin = (ddb_gtkui_t *) deadbeef->plug_get_for_id (DDB_GTKUI_PLUGIN_ID);
@@ -1723,39 +1719,28 @@ waveform_connect (void)
         if (gtkui_plugin->gui.plugin.version_major == 2) {
             //printf ("fb api2\n");
             // 0.6+, use the new widget API
-            gtkui_plugin->w_reg_widget ("Waveform Seekbar", DDB_WF_SINGLE_INSTANCE, w_waveform_create, "waveform_seekbar", NULL);
+            gtkui_plugin->w_reg_widget ("Waveform Seekbar", DDB_WF_SINGLE_INSTANCE, waveform_create, "waveform_seekbar", NULL);
             return 0;
         }
     }
     return -1;
 }
 
-int
+static int
 waveform_start (void)
 {
     load_config ();
     return 0;
 }
 
-int
+static int
 waveform_stop (void)
 {
     save_config ();
     return 0;
 }
 
-int
-waveform_startup (GtkWidget *cont)
-{
-    return 0;
-}
-
-int
-waveform_shutdown (GtkWidget *cont)
-{
-    return 0;
-}
-int
+static int
 waveform_disconnect (void)
 {
     gtkui_plugin = NULL;
@@ -1774,7 +1759,7 @@ waveform_action_lookup (DB_plugin_action_t *action, int ctx)
             while (it) {
                 if (deadbeef->pl_is_selected (it)) {
                     const char *uri = deadbeef->pl_find_meta_raw (it, ":URI");
-                    if (waveform_cached (it, uri)) {
+                    if (waveform_is_cached (it, uri)) {
                         waveform_delete (it, uri);
                     }
                 }
@@ -1807,7 +1792,7 @@ waveform_get_actions (DB_playItem_t *it)
     lookup_action.flags |= DB_ACTION_DISABLED;
     DB_playItem_t *current = deadbeef->pl_get_first (PL_MAIN);
     while (current) {
-        if (deadbeef->pl_is_selected (current) && waveform_cached (current, deadbeef->pl_find_meta_raw (current, ":URI"))) {
+        if (deadbeef->pl_is_selected (current) && waveform_is_cached (current, deadbeef->pl_find_meta_raw (current, ":URI"))) {
             lookup_action.flags &= ~DB_ACTION_DISABLED;
             deadbeef->pl_item_unref (current);
             break;
