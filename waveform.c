@@ -894,7 +894,9 @@ waveform_draw (void *user_data, int shaded)
     COLOUR color_fg, color_rms;
     if (CONFIG_SHADE_WAVEFORM == 1 && shaded == 1) {
         color_fg = (COLOUR) { CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f, 1.0};
-        color_rms = (COLOUR) { (CONFIG_PB_COLOR.red - 0.2 * CONFIG_PB_COLOR.red)/65535.f,(CONFIG_PB_COLOR.green - 0.2 * CONFIG_PB_COLOR.green)/65535.f,(CONFIG_PB_COLOR.blue - 0.2 * CONFIG_PB_COLOR.blue)/65535.f, 1.0};
+        color_rms = (COLOUR) { (CONFIG_PB_COLOR.red - 0.2 * CONFIG_PB_COLOR.red)/65535.f,
+                               (CONFIG_PB_COLOR.green - 0.2 * CONFIG_PB_COLOR.green)/65535.f,
+                               (CONFIG_PB_COLOR.blue - 0.2 * CONFIG_PB_COLOR.blue)/65535.f, 1.0};
     }
     else  {
         color_fg = render.c_fg;
@@ -1407,6 +1409,8 @@ waveform_get_wavedata (gpointer user_data)
                     deadbeef->mutex_unlock (w->mutex);
                     g_idle_add (waveform_redraw_cb, w);
 
+                }
+                if (playing) {
                     deadbeef->pl_item_unref (playing);
                 }
 
@@ -1536,10 +1540,7 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
     if (trk) {
         GtkAllocation a;
         gtk_widget_get_allocation (w->drawarea, &a);
-        float time = (event->x - a.x) * deadbeef->pl_get_item_duration (trk) / (a.width) * 1000.f;
-        if (time < 0) {
-            time = 0;
-        }
+        const float time = MAX (0, (event->x - a.x) * deadbeef->pl_get_item_duration (trk) / (a.width) * 1000.f);
         deadbeef->sendmessage (DB_EV_SEEK, 0, time, 0);
         deadbeef->pl_item_unref (trk);
     }
@@ -1720,8 +1721,6 @@ waveform_connect (void)
     if (gtkui_plugin) {
         trace ("using '%s' plugin %d.%d\n", DDB_GTKUI_PLUGIN_ID, gtkui_plugin->gui.plugin.version_major, gtkui_plugin->gui.plugin.version_minor );
         if (gtkui_plugin->gui.plugin.version_major == 2) {
-            //printf ("fb api2\n");
-            // 0.6+, use the new widget API
             gtkui_plugin->w_reg_widget ("Waveform Seekbar", DDB_WF_SINGLE_INSTANCE, waveform_create, "waveform_seekbar", NULL);
             return 0;
         }
