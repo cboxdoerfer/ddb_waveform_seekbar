@@ -1745,6 +1745,9 @@ waveform_stop (void)
 static int
 waveform_disconnect (void)
 {
+    if (gtkui_plugin) {
+        gtkui_plugin->w_unreg_widget ("waveform_seekbar");
+    }
     gtkui_plugin = NULL;
     return 0;
 }
