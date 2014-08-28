@@ -1514,8 +1514,8 @@ static gboolean
 waveform_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
     waveform_t *w = user_data;
-    if (event->button == 3) {
-      return TRUE;
+    if (event->button == 3 || event->button == 2) {
+        return TRUE;
     }
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
@@ -1531,8 +1531,12 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
 {
     waveform_t *w = user_data;
     if (event->button == 3) {
-      gtk_menu_popup (GTK_MENU (w->popup), NULL, NULL, NULL, w->drawarea, 0, gtk_get_current_event_time ());
-      return TRUE;
+        gtk_menu_popup (GTK_MENU (w->popup), NULL, NULL, NULL, w->drawarea, 0, gtk_get_current_event_time ());
+        return TRUE;
+    }
+    if (event->button == 2) {
+        deadbeef->sendmessage (DB_EV_TOGGLE_PAUSE, 0, 0, 0);
+        return TRUE;
     }
     w->seekbar_moving = 0;
     w->seekbar_move_x_clicked = 0;
