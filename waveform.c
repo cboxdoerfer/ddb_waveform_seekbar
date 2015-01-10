@@ -185,6 +185,9 @@ waveform_redraw_cb (void *user_data);
 static void
 waveform_draw (void *user_data, int shaded);
 
+static gboolean
+waveform_set_refresh_interval (void *user_data, int interval);
+
 static void
 save_config (void)
 {
@@ -287,11 +290,7 @@ on_config_changed (void *widget)
             break;
     }
 
-    if (w->drawtimer) {
-        g_source_remove (w->drawtimer);
-        w->drawtimer = 0;
-    }
-    w->drawtimer = g_timeout_add (CONFIG_REFRESH_INTERVAL, waveform_draw_cb, w);
+    waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
     g_idle_add (waveform_redraw_cb, w);
     return 0;
 }
@@ -1438,6 +1437,21 @@ waveform_get_wavedata (gpointer user_data)
     deadbeef->background_job_decrement ();
 }
 
+static gboolean
+waveform_set_refresh_interval (gpointer user_data, int interval)
+{
+    waveform_t *w = user_data;
+    if (!w || interval <= 0) {
+        return FALSE;
+    }
+    if (w->drawtimer) {
+        g_source_remove (w->drawtimer);
+        w->drawtimer = 0;
+    }
+    w->drawtimer = g_timeout_add (interval, waveform_draw_cb, w);
+    return TRUE;
+}
+
 static void
 waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
@@ -1459,10 +1473,7 @@ static gboolean
 waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 {
     waveform_t *w = user_data;
-    if (w->resizetimer) {
-        g_source_remove (w->resizetimer);
-    }
-    w->resizetimer = g_timeout_add (500, waveform_redraw_cb, w);
+    waveform_set_refresh_interval (w, 500);
     return FALSE;
 }
 
@@ -1567,6 +1578,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         w->wave->channels = 0;
         deadbeef->mutex_unlock (w->mutex);
         //queue_add (deadbeef->pl_find_meta_raw (ev->track, ":URI"));
+        waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         g_idle_add (waveform_redraw_cb, w);
         tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
@@ -1577,10 +1589,25 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         w->wave->data_len = 0;
         w->wave->channels = 0;
         deadbeef->mutex_unlock (w->mutex);
+        if (w->drawtimer) {
+            g_source_remove (w->drawtimer);
+            w->drawtimer = 0;
+        }
         g_idle_add (waveform_redraw_cb, w);
         break;
     case DB_EV_CONFIGCHANGED:
         on_config_changed (w);
+        break;
+    case DB_EV_PAUSED:
+        if (deadbeef->get_output ()->state () == OUTPUT_STATE_PLAYING) {
+            waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
+        }
+        else {
+            if (w->drawtimer) {
+                g_source_remove (w->drawtimer);
+                w->drawtimer = 0;
+            }
+        }
         break;
     }
     return 0;
