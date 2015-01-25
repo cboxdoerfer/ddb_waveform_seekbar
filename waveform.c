@@ -1473,7 +1473,14 @@ static gboolean
 waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 {
     waveform_t *w = user_data;
-    waveform_set_refresh_interval (w, 500);
+    if (!w) {
+        return FALSE;
+    }
+    if (w->resizetimer) {
+        g_source_remove (w->resizetimer);
+        w->resizetimer = 0;
+    }
+    w->resizetimer = g_timeout_add (500, waveform_redraw_cb, w);
     return FALSE;
 }
 
@@ -1697,6 +1704,7 @@ waveform_init (ddb_gtkui_widget_t *w)
         deadbeef->thread_detach (tid);
         deadbeef->pl_item_unref (it);
     }
+    wf->resizetimer = 0;
     if (wf->resizetimer) {
         g_source_remove (wf->resizetimer);
         wf->resizetimer = 0;
