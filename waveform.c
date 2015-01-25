@@ -36,9 +36,10 @@
 #include <deadbeef/deadbeef.h>
 #include <deadbeef/gtkui_api.h>
 #include "cache.h"
-
-#define trace(...) { fprintf(stderr, __VA_ARGS__); }
-//#define trace(fmt,...)
+#include "config.h"
+#include "config_dialog.h"
+#include "utils.h"
+#include "waveform.h"
 
 #define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
@@ -49,59 +50,14 @@
 #define MAX_CHANNELS (6)
 #define MAX_SAMPLES (4096)
 
-#define     CONFSTR_WF_LOG_ENABLED       "waveform.log_enabled"
-#define     CONFSTR_WF_MIX_TO_MONO       "waveform.mix_to_mono"
-#define     CONFSTR_WF_DISPLAY_RMS       "waveform.display_rms"
-#define     CONFSTR_WF_RENDER_METHOD     "waveform.render_method"
-#define     CONFSTR_WF_SOUNDCLOUD_STYLE  "waveform.soundcloud_style"
-#define     CONFSTR_WF_SHADE_WAVEFORM    "waveform.shade_waveform"
-#define     CONFSTR_WF_BG_COLOR_R        "waveform.bg_color_r"
-#define     CONFSTR_WF_BG_COLOR_G        "waveform.bg_color_g"
-#define     CONFSTR_WF_BG_COLOR_B        "waveform.bg_color_b"
-#define     CONFSTR_WF_BG_ALPHA          "waveform.bg_alpha"
-#define     CONFSTR_WF_FG_COLOR_R        "waveform.fg_color_r"
-#define     CONFSTR_WF_FG_COLOR_G        "waveform.fg_color_g"
-#define     CONFSTR_WF_FG_COLOR_B        "waveform.fg_color_b"
-#define     CONFSTR_WF_FG_ALPHA          "waveform.fg_alpha"
-#define     CONFSTR_WF_PB_COLOR_R        "waveform.pb_color_r"
-#define     CONFSTR_WF_PB_COLOR_G        "waveform.pb_color_g"
-#define     CONFSTR_WF_PB_COLOR_B        "waveform.pb_color_b"
-#define     CONFSTR_WF_PB_ALPHA          "waveform.pb_alpha"
-#define     CONFSTR_WF_FG_RMS_COLOR_R    "waveform.fg_rms_color_r"
-#define     CONFSTR_WF_FG_RMS_COLOR_G    "waveform.fg_rms_color_g"
-#define     CONFSTR_WF_FG_RMS_COLOR_B    "waveform.fg_rms_color_b"
-#define     CONFSTR_WF_FG_RMS_ALPHA      "waveform.fg_rms_alpha"
-
-#define     CONFSTR_WF_REFRESH_INTERVAL  "waveform.refresh_interval"
-#define     CONFSTR_WF_BORDER_WIDTH      "waveform.border_width"
-#define     CONFSTR_WF_CURSOR_WIDTH      "waveform.cursor_width"
-#define     CONFSTR_WF_FONT_SIZE         "waveform.font_size"
-#define     CONFSTR_WF_MAX_FILE_LENGTH   "waveform.max_file_length"
-#define     CONFSTR_WF_CACHE_ENABLED     "waveform.cache_enabled"
-#define     CONFSTR_WF_SCROLL_ENABLED    "waveform.scroll_enabled"
-#define     CONFSTR_WF_NUM_SAMPLES       "waveform.num_samples"
-
 
 /* Global variables */
+DB_functions_t *     deadbeef = NULL;
 static DB_misc_t            plugin;
-static DB_functions_t *     deadbeef = NULL;
 static ddb_gtkui_t *        gtkui_plugin = NULL;
 
 static char cache_path[PATH_MAX];
 static int cache_path_size;
-
-typedef struct COLOUR
-{
-    double r;
-    double g;
-    double b;
-    double a;
-} COLOUR;
-
-typedef struct
-{
-    COLOUR c_fg, c_rms, c_bg;
-} RENDER;
 
 typedef struct wavedata_s
 {
@@ -133,48 +89,13 @@ typedef struct
     cairo_surface_t *surf_shaded;
 } waveform_t;
 
-typedef struct cache_query_s
-{
-    char *fname;
-    struct cache_query_s *next;
-} cache_query_t;
-
 typedef struct DRECT
 {
     double x1, y1;
     double x2, y2;
 } DRECT;
 
-enum STYLE { BARS = 1, SPIKES = 2 };
-
-static cache_query_t *queue;
-static cache_query_t *queue_tail;
-static uintptr_t mutex;
-
-static gboolean CONFIG_LOG_ENABLED = FALSE;
-static gboolean CONFIG_MIX_TO_MONO = FALSE;
-static gboolean CONFIG_CACHE_ENABLED = TRUE;
-static gboolean CONFIG_SCROLL_ENABLED = TRUE;
-static gboolean CONFIG_DISPLAY_RMS = TRUE;
-static gboolean CONFIG_SHADE_WAVEFORM = FALSE;
-static gboolean CONFIG_SOUNDCLOUD_STYLE = FALSE;
-static GdkColor CONFIG_BG_COLOR;
-static GdkColor CONFIG_FG_COLOR;
-static GdkColor CONFIG_PB_COLOR;
-static GdkColor CONFIG_FG_RMS_COLOR;
-static guint16  CONFIG_BG_ALPHA;
-static guint16  CONFIG_FG_ALPHA;
-static guint16  CONFIG_PB_ALPHA;
-static guint16  CONFIG_FG_RMS_ALPHA;
-static gint     CONFIG_RENDER_METHOD = SPIKES;
-static gint     CONFIG_BORDER_WIDTH = 1;
-static gint     CONFIG_CURSOR_WIDTH = 3;
-static gint     CONFIG_FONT_SIZE = 18;
-static gint     CONFIG_MAX_FILE_LENGTH = 180;
-static gint     CONFIG_NUM_SAMPLES = 2048;
-static gint     CONFIG_REFRESH_INTERVAL = 33;
-
-static RENDER render;
+RENDER render;
 
 static gboolean
 waveform_draw_cb (void *user_data);
@@ -187,93 +108,6 @@ waveform_draw (void *user_data, int shaded);
 
 static gboolean
 waveform_set_refresh_interval (void *user_data, int interval);
-
-static void
-save_config (void)
-{
-    deadbeef->conf_set_int (CONFSTR_WF_LOG_ENABLED,         CONFIG_LOG_ENABLED);
-    deadbeef->conf_set_int (CONFSTR_WF_MIX_TO_MONO,         CONFIG_MIX_TO_MONO);
-    deadbeef->conf_set_int (CONFSTR_WF_DISPLAY_RMS,         CONFIG_DISPLAY_RMS);
-    deadbeef->conf_set_int (CONFSTR_WF_SHADE_WAVEFORM,      CONFIG_SHADE_WAVEFORM);
-    deadbeef->conf_set_int (CONFSTR_WF_SOUNDCLOUD_STYLE,    CONFIG_SOUNDCLOUD_STYLE);
-    deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
-    deadbeef->conf_set_int (CONFSTR_WF_BORDER_WIDTH,        CONFIG_BORDER_WIDTH);
-    deadbeef->conf_set_int (CONFSTR_WF_CURSOR_WIDTH,        CONFIG_CURSOR_WIDTH);
-    deadbeef->conf_set_int (CONFSTR_WF_FONT_SIZE,           CONFIG_FONT_SIZE);
-    deadbeef->conf_set_int (CONFSTR_WF_MAX_FILE_LENGTH,     CONFIG_MAX_FILE_LENGTH);
-    deadbeef->conf_set_int (CONFSTR_WF_REFRESH_INTERVAL,    CONFIG_REFRESH_INTERVAL);
-    deadbeef->conf_set_int (CONFSTR_WF_NUM_SAMPLES,         CONFIG_NUM_SAMPLES);
-    deadbeef->conf_set_int (CONFSTR_WF_CACHE_ENABLED,       CONFIG_CACHE_ENABLED);
-    deadbeef->conf_set_int (CONFSTR_WF_SCROLL_ENABLED,      CONFIG_SCROLL_ENABLED);
-    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_R,          CONFIG_BG_COLOR.red);
-    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_G,          CONFIG_BG_COLOR.green);
-    deadbeef->conf_set_int (CONFSTR_WF_BG_COLOR_B,          CONFIG_BG_COLOR.blue);
-    deadbeef->conf_set_int (CONFSTR_WF_BG_ALPHA,            CONFIG_BG_ALPHA);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_R,          CONFIG_FG_COLOR.red);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_G,          CONFIG_FG_COLOR.green);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_COLOR_B,          CONFIG_FG_COLOR.blue);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_ALPHA,            CONFIG_FG_ALPHA);
-    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_R,          CONFIG_PB_COLOR.red);
-    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_G,          CONFIG_PB_COLOR.green);
-    deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_B,          CONFIG_PB_COLOR.blue);
-    deadbeef->conf_set_int (CONFSTR_WF_PB_ALPHA,            CONFIG_PB_ALPHA);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_RMS_COLOR_R,      CONFIG_FG_RMS_COLOR.red);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_RMS_COLOR_G,      CONFIG_FG_RMS_COLOR.green);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_RMS_COLOR_B,      CONFIG_FG_RMS_COLOR.blue);
-    deadbeef->conf_set_int (CONFSTR_WF_FG_RMS_ALPHA,        CONFIG_FG_RMS_ALPHA);
-}
-
-static void
-load_config (void)
-{
-    deadbeef->conf_lock ();
-    CONFIG_LOG_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_LOG_ENABLED,             FALSE);
-    CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,             FALSE);
-    CONFIG_DISPLAY_RMS = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RMS,              TRUE);
-    CONFIG_SHADE_WAVEFORM = deadbeef->conf_get_int (CONFSTR_WF_SHADE_WAVEFORM,       FALSE);
-    CONFIG_SOUNDCLOUD_STYLE = deadbeef->conf_get_int (CONFSTR_WF_SOUNDCLOUD_STYLE,   FALSE);
-    CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
-    CONFIG_BORDER_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_BORDER_WIDTH,               1);
-    CONFIG_CURSOR_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_CURSOR_WIDTH,               3);
-    CONFIG_FONT_SIZE = deadbeef->conf_get_int (CONFSTR_WF_FONT_SIZE,                    18);
-    CONFIG_REFRESH_INTERVAL = deadbeef->conf_get_int (CONFSTR_WF_REFRESH_INTERVAL,      33);
-    CONFIG_MAX_FILE_LENGTH = deadbeef->conf_get_int (CONFSTR_WF_MAX_FILE_LENGTH,       180);
-    CONFIG_NUM_SAMPLES = deadbeef->conf_get_int (CONFSTR_WF_NUM_SAMPLES,              2048);
-    CONFIG_CACHE_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_CACHE_ENABLED,          TRUE);
-    CONFIG_SCROLL_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_SCROLL_ENABLED,        TRUE);
-
-    CONFIG_BG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_R,             50000);
-    CONFIG_BG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_G,           50000);
-    CONFIG_BG_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_BG_COLOR_B,            50000);
-    CONFIG_BG_ALPHA = deadbeef->conf_get_int (CONFSTR_WF_BG_ALPHA,                   65535);
-
-    CONFIG_FG_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_R,             20000);
-    CONFIG_FG_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_G,           20000);
-    CONFIG_FG_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_FG_COLOR_B,            20000);
-    CONFIG_FG_ALPHA = deadbeef->conf_get_int (CONFSTR_WF_FG_ALPHA,                   65535);
-
-    CONFIG_PB_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_R,                 0);
-    CONFIG_PB_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_G,           65535);
-    CONFIG_PB_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_B,                0);
-    CONFIG_PB_ALPHA = deadbeef->conf_get_int (CONFSTR_WF_PB_ALPHA,                   20000);
-
-    CONFIG_FG_RMS_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_FG_RMS_COLOR_R,      5000);
-    CONFIG_FG_RMS_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_FG_RMS_COLOR_G,    5000);
-    CONFIG_FG_RMS_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_FG_RMS_COLOR_B,     5000);
-    CONFIG_FG_RMS_ALPHA = deadbeef->conf_get_int (CONFSTR_WF_FG_RMS_ALPHA,           65535);
-
-    deadbeef->conf_unlock ();
-
-    render =
-    (RENDER) {
-        /*foreground*/  { CONFIG_FG_COLOR.red/65535.f,CONFIG_FG_COLOR.green/65535.f,
-                          CONFIG_FG_COLOR.blue/65535.f, CONFIG_FG_ALPHA/65535.f },
-        /*wave-rms*/    { CONFIG_FG_RMS_COLOR.red/65535.f,CONFIG_FG_RMS_COLOR.green/65535.f,
-                          CONFIG_FG_RMS_COLOR.blue/65535.f, CONFIG_FG_RMS_ALPHA/65535.f },
-        /*background*/  { CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,
-                          CONFIG_BG_COLOR.blue/65535.f, CONFIG_BG_ALPHA/65535.f },
-    };
-}
 
 static int
 on_config_changed (void *widget)
@@ -293,314 +127,6 @@ on_config_changed (void *widget)
     waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
     g_idle_add (waveform_redraw_cb, w);
     return 0;
-}
-
-#if !GTK_CHECK_VERSION(2,14,0)
-#define gtk_widget_get_window(widget) ((widget)->window)
-#define gtk_dialog_get_content_area(dialog) (dialog->vbox)
-#define gtk_dialog_get_action_area(dialog) (dialog->action_area)
-#endif
-
-#if !GTK_CHECK_VERSION(2,18,0)
-void
-gtk_widget_get_allocation (GtkWidget *widget, GtkAllocation *allocation) {
-    (allocation)->x = widget->allocation.x;
-    (allocation)->y = widget->allocation.y;
-    (allocation)->width = widget->allocation.width;
-    (allocation)->height = widget->allocation.height;
-}
-#define gtk_widget_set_can_default(widget, candefault) {if (candefault) GTK_WIDGET_SET_FLAGS (widget, GTK_CAN_DEFAULT); else GTK_WIDGET_UNSET_FLAGS(widget, GTK_CAN_DEFAULT);}
-#endif
-
-static void
-on_button_config (GtkMenuItem *menuitem, gpointer user_data)
-{
-    GtkWidget *waveform_properties;
-    GtkWidget *config_dialog;
-    GtkWidget *vbox01;
-    GtkWidget *color_label;
-    GtkWidget *color_frame;
-    GtkWidget *color_table;
-    GtkWidget *color_background_label;
-    GtkWidget *background_color;
-    GtkWidget *color_waveform_label;
-    GtkWidget *foreground_color;
-    GtkWidget *color_rms_label;
-    GtkWidget *foreground_rms_color;
-    GtkWidget *color_progressbar_label;
-    GtkWidget *progressbar_color;
-    GtkWidget *downmix_to_mono;
-    GtkWidget *log_scale;
-    GtkWidget *display_rms;
-    GtkWidget *style_label;
-    GtkWidget *style_frame;
-    GtkWidget *vbox02;
-    GtkWidget *render_method_spikes;
-    GtkWidget *render_method_bars;
-    GtkWidget *shade_waveform;
-    GtkWidget *soundcloud_style;
-    GtkWidget *dialog_action_area13;
-    GtkWidget *applybutton1;
-    GtkWidget *cancelbutton1;
-    GtkWidget *okbutton1;
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    waveform_properties = gtk_dialog_new ();
-    gtk_window_set_title (GTK_WINDOW (waveform_properties), "Waveform Properties");
-    gtk_window_set_type_hint (GTK_WINDOW (waveform_properties), GDK_WINDOW_TYPE_HINT_DIALOG);
-
-    config_dialog = gtk_dialog_get_content_area (GTK_DIALOG (waveform_properties));
-    gtk_widget_show (config_dialog);
-
-    vbox01 = gtk_vbox_new (FALSE, 8);
-    gtk_widget_show (vbox01);
-    gtk_box_pack_start (GTK_BOX (config_dialog), vbox01, FALSE, FALSE, 0);
-    gtk_container_set_border_width (GTK_CONTAINER (vbox01), 12);
-
-    color_label = gtk_label_new (NULL);
-    gtk_label_set_markup (GTK_LABEL (color_label),"<b>Colors</b>");
-    gtk_widget_show (color_label);
-
-    color_frame = gtk_frame_new ("Colors");
-    gtk_frame_set_label_widget ((GtkFrame *)color_frame, color_label);
-    gtk_frame_set_shadow_type ((GtkFrame *)color_frame, GTK_SHADOW_IN);
-    gtk_widget_show (color_frame);
-    gtk_box_pack_start (GTK_BOX (vbox01), color_frame, TRUE, FALSE, 0);
-
-    color_table = gtk_table_new (2, 4, TRUE);
-    gtk_widget_show (color_table);
-    gtk_container_add (GTK_CONTAINER (color_frame), color_table);
-    gtk_table_set_col_spacings ((GtkTable *) color_table, 8);
-    gtk_container_set_border_width (GTK_CONTAINER (color_table), 6);
-
-    color_background_label = gtk_label_new ("Background");
-    gtk_widget_show (color_background_label);
-    gtk_table_attach_defaults ((GtkTable *) color_table, color_background_label, 0,1,0,1);
-
-    color_waveform_label = gtk_label_new ("Waveform");
-    gtk_widget_show (color_waveform_label);
-    gtk_table_attach_defaults ((GtkTable *) color_table, color_waveform_label, 1,2,0,1);
-
-    color_rms_label = gtk_label_new ("RMS");
-    gtk_widget_show (color_rms_label);
-    gtk_table_attach_defaults ((GtkTable *) color_table, color_rms_label, 2,3,0,1);
-
-    color_progressbar_label = gtk_label_new ("Progressbar");
-    gtk_widget_show (color_progressbar_label);
-    gtk_table_attach_defaults ((GtkTable *) color_table, color_progressbar_label, 3,4,0,1);
-
-    background_color = gtk_color_button_new ();
-    gtk_color_button_set_use_alpha ((GtkColorButton *)background_color, TRUE);
-    gtk_widget_show (background_color);
-    gtk_table_attach_defaults ((GtkTable *) color_table, background_color, 0,1,1,2);
-
-    foreground_color = gtk_color_button_new ();
-    gtk_color_button_set_use_alpha ((GtkColorButton *)foreground_color, TRUE);
-    gtk_widget_show (foreground_color);
-    gtk_table_attach_defaults ((GtkTable *) color_table, foreground_color, 1,2,1,2);
-
-    foreground_rms_color = gtk_color_button_new ();
-    gtk_color_button_set_use_alpha ((GtkColorButton *)foreground_rms_color, TRUE);
-    gtk_widget_show (foreground_rms_color);
-    gtk_table_attach_defaults ((GtkTable *) color_table, foreground_rms_color, 2,3,1,2);
-
-    progressbar_color = gtk_color_button_new ();
-    gtk_color_button_set_use_alpha ((GtkColorButton *)progressbar_color, TRUE);
-    gtk_widget_show (progressbar_color);
-    gtk_table_attach_defaults ((GtkTable *) color_table, progressbar_color, 3,4,1,2);
-
-    style_label = gtk_label_new (NULL);
-    gtk_label_set_markup (GTK_LABEL (style_label),"<b>Style</b>");
-    gtk_widget_show (style_label);
-
-    style_frame = gtk_frame_new ("Style");
-    gtk_frame_set_label_widget ((GtkFrame *)style_frame, style_label);
-    gtk_frame_set_shadow_type ((GtkFrame *)style_frame, GTK_SHADOW_IN);
-    gtk_widget_show (style_frame);
-    gtk_box_pack_start (GTK_BOX (vbox01), style_frame, FALSE, FALSE, 0);
-
-    vbox02 = gtk_vbox_new (FALSE, 6);
-    gtk_widget_show (vbox02);
-    gtk_container_add (GTK_CONTAINER (style_frame), vbox02);
-
-    render_method_spikes = gtk_radio_button_new_with_label (NULL, "Spikes");
-    gtk_widget_show (render_method_spikes);
-    gtk_box_pack_start (GTK_BOX (vbox02), render_method_spikes, TRUE, TRUE, 0);
-
-    render_method_bars = gtk_radio_button_new_with_label_from_widget ((GtkRadioButton *)render_method_spikes, "Bars");
-    gtk_widget_show (render_method_bars);
-    gtk_box_pack_start (GTK_BOX (vbox02), render_method_bars, TRUE, TRUE, 0);
-
-    soundcloud_style = gtk_check_button_new_with_label ("Soundcloud style");
-    gtk_widget_show (soundcloud_style);
-    gtk_box_pack_start (GTK_BOX (vbox02), soundcloud_style, TRUE, TRUE, 0);
-
-    shade_waveform = gtk_check_button_new_with_label ("Shade waveform");
-    gtk_widget_show (shade_waveform);
-    gtk_box_pack_start (GTK_BOX (vbox02), shade_waveform, TRUE, TRUE, 0);
-
-    downmix_to_mono = gtk_check_button_new_with_label ("Downmix to mono");
-    gtk_widget_show (downmix_to_mono);
-    gtk_box_pack_start (GTK_BOX (vbox01), downmix_to_mono, FALSE, FALSE, 0);
-
-    log_scale = gtk_check_button_new_with_label ("Logarithmic scale");
-    gtk_widget_show (log_scale);
-    gtk_box_pack_start (GTK_BOX (vbox01), log_scale, FALSE, FALSE, 0);
-
-    display_rms = gtk_check_button_new_with_label ("Display RMS");
-    gtk_widget_show (display_rms);
-    gtk_box_pack_start (GTK_BOX (vbox01), display_rms, FALSE, FALSE, 0);
-
-    dialog_action_area13 = gtk_dialog_get_action_area (GTK_DIALOG (waveform_properties));
-    gtk_widget_show (dialog_action_area13);
-    gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area13), GTK_BUTTONBOX_END);
-
-    applybutton1 = gtk_button_new_from_stock ("gtk-apply");
-    gtk_widget_show (applybutton1);
-    gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), applybutton1, GTK_RESPONSE_APPLY);
-    gtk_widget_set_can_default (applybutton1, TRUE);
-
-    cancelbutton1 = gtk_button_new_from_stock ("gtk-cancel");
-    gtk_widget_show (cancelbutton1);
-    gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), cancelbutton1, GTK_RESPONSE_CANCEL);
-    gtk_widget_set_can_default (cancelbutton1, TRUE);
-
-    okbutton1 = gtk_button_new_from_stock ("gtk-ok");
-    gtk_widget_show (okbutton1);
-    gtk_dialog_add_action_widget (GTK_DIALOG (waveform_properties), okbutton1, GTK_RESPONSE_OK);
-    gtk_widget_set_can_default (okbutton1, TRUE);
-
-    gtk_color_button_set_color (GTK_COLOR_BUTTON (background_color), &CONFIG_BG_COLOR);
-    gtk_color_button_set_color (GTK_COLOR_BUTTON (foreground_color), &CONFIG_FG_COLOR);
-    gtk_color_button_set_color (GTK_COLOR_BUTTON (progressbar_color), &CONFIG_PB_COLOR);
-    gtk_color_button_set_color (GTK_COLOR_BUTTON (foreground_rms_color), &CONFIG_FG_RMS_COLOR);
-    gtk_color_button_set_alpha (GTK_COLOR_BUTTON (background_color), CONFIG_BG_ALPHA);
-    gtk_color_button_set_alpha (GTK_COLOR_BUTTON (foreground_color), CONFIG_FG_ALPHA);
-    gtk_color_button_set_alpha (GTK_COLOR_BUTTON (progressbar_color), CONFIG_PB_ALPHA);
-    gtk_color_button_set_alpha (GTK_COLOR_BUTTON (foreground_rms_color), CONFIG_FG_RMS_ALPHA);
-
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (downmix_to_mono), CONFIG_MIX_TO_MONO);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (log_scale), CONFIG_LOG_ENABLED);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (display_rms), CONFIG_DISPLAY_RMS);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (shade_waveform), CONFIG_SHADE_WAVEFORM);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (soundcloud_style), CONFIG_SOUNDCLOUD_STYLE);
-
-    gtk_widget_set_sensitive (display_rms, !CONFIG_SOUNDCLOUD_STYLE);
-
-    switch (CONFIG_RENDER_METHOD) {
-    case SPIKES:
-        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_spikes), TRUE);
-        break;
-    case BARS:
-        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (render_method_bars), TRUE);
-        break;
-    }
-
-    for (;;) {
-        int response = gtk_dialog_run (GTK_DIALOG (waveform_properties));
-        if (response == GTK_RESPONSE_OK || response == GTK_RESPONSE_APPLY) {
-            gtk_color_button_get_color (GTK_COLOR_BUTTON (background_color), &CONFIG_BG_COLOR);
-            gtk_color_button_get_color (GTK_COLOR_BUTTON (foreground_color), &CONFIG_FG_COLOR);
-            gtk_color_button_get_color (GTK_COLOR_BUTTON (progressbar_color), &CONFIG_PB_COLOR);
-            gtk_color_button_get_color (GTK_COLOR_BUTTON (foreground_rms_color), &CONFIG_FG_RMS_COLOR);
-            CONFIG_BG_ALPHA = gtk_color_button_get_alpha (GTK_COLOR_BUTTON (background_color));
-            CONFIG_FG_ALPHA = gtk_color_button_get_alpha (GTK_COLOR_BUTTON (foreground_color));
-            CONFIG_PB_ALPHA = gtk_color_button_get_alpha (GTK_COLOR_BUTTON (progressbar_color));
-            CONFIG_FG_RMS_ALPHA = gtk_color_button_get_alpha (GTK_COLOR_BUTTON (foreground_rms_color));
-            CONFIG_MIX_TO_MONO = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (downmix_to_mono));
-            CONFIG_LOG_ENABLED = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (log_scale));
-            CONFIG_DISPLAY_RMS = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (display_rms));
-            CONFIG_SHADE_WAVEFORM = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (shade_waveform));
-            CONFIG_SOUNDCLOUD_STYLE = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (soundcloud_style));
-            gtk_widget_set_sensitive (display_rms, !CONFIG_SOUNDCLOUD_STYLE);
-            if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_spikes)) == TRUE) {
-                CONFIG_RENDER_METHOD = SPIKES;
-            }
-            else if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_bars)) == TRUE) {
-                CONFIG_RENDER_METHOD = BARS;
-            }
-            save_config ();
-            deadbeef->sendmessage (DB_EV_CONFIGCHANGED, 0, 0, 0);
-        }
-        if (response == GTK_RESPONSE_APPLY) {
-            continue;
-        }
-        break;
-    }
-    gtk_widget_destroy (waveform_properties);
-#pragma GCC diagnostic pop
-    return;
-}
-
-static void
-queue_add (const char *fname)
-{
-    deadbeef->mutex_lock (mutex);
-    for (cache_query_t *q = queue; q; q = q->next) {
-        if (!strcmp (fname, q->fname)) {
-            // already queued
-            trace ("waveform: already queued. (%s)\n",fname);
-            deadbeef->mutex_unlock (mutex);
-            return;
-        }
-    }
-    cache_query_t *q = malloc (sizeof (cache_query_t));
-    memset (q, 0, sizeof (cache_query_t));
-    q->fname = strdup (fname);
-    if (queue_tail) {
-        queue_tail->next = q;
-        queue_tail = q;
-    }
-    else {
-        queue = queue_tail = q;
-    }
-    trace ("waveform: queued. (%s)\n",fname);
-    deadbeef->mutex_unlock (mutex);
-}
-
-static void
-queue_pop (void)
-{
-    deadbeef->mutex_lock (mutex);
-    cache_query_t *next = queue ? queue->next : NULL;
-    if (queue) {
-        if (queue->fname) {
-            trace ("waveform: removed from queue. (%s)\n",queue->fname);
-            free (queue->fname);
-        }
-        free (queue);
-    }
-    queue = next;
-    if (!queue) {
-        queue_tail = NULL;
-    }
-    deadbeef->mutex_unlock (mutex);
-}
-
-static int
-check_dir (const char *dir, mode_t mode)
-{
-    char *tmp = strdup (dir);
-    char *slash = tmp;
-    struct stat stat_buf;
-    do
-    {
-        slash = strstr (slash+1, "/");
-        if (slash)
-            *slash = 0;
-        if (-1 == stat (tmp, &stat_buf))
-        {
-            if (0 != mkdir (tmp, mode))
-            {
-                free (tmp);
-                return 0;
-            }
-        }
-        if (slash)
-            *slash = '/';
-    } while (slash);
-    free (tmp);
-    return 1;
 }
 
 static int
@@ -1601,6 +1127,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
             w->drawtimer = 0;
         }
         g_idle_add (waveform_redraw_cb, w);
+        gtk_widget_queue_draw (w->drawarea);
         break;
     case DB_EV_CONFIGCHANGED:
         on_config_changed (w);
@@ -1663,10 +1190,10 @@ waveform_destroy (ddb_gtkui_widget_t *widget)
         deadbeef->mutex_free (w->mutex_rendering);
         w->mutex_rendering = 0;
     }
-    if (mutex) {
-        deadbeef->mutex_free (mutex);
-        mutex = 0;
-    }
+    //if (mutex) {
+    //    deadbeef->mutex_free (mutex);
+    //    mutex = 0;
+    //}
 }
 
 static void
@@ -1729,7 +1256,7 @@ waveform_create (void)
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
     w->mutex_rendering = deadbeef->mutex_create ();
-    mutex = deadbeef->mutex_create ();
+    //mutex = deadbeef->mutex_create ();
     gtk_widget_set_size_request (w->base.widget, 20, 16);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->frame);
     gtk_container_add (GTK_CONTAINER (w->frame), w->drawarea);
