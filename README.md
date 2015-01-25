@@ -54,8 +54,10 @@ Edit -> Preferences -> Plugins -> Waveform Seekbar -> Configure
 
 ## Screenshots
 ### Waveform
-![](http://i.imgur.com/hLeecgF.png)
+![](http://i.imgur.com/StjuEzc.png)
+
+![](http://i.imgur.com/uI6YAzs.png)
 
 ### Settings
-![](http://i.imgur.com/eMqXgtP.png)
-
+![](http://i.imgur.com/niEuKVT.png)
+![](http://i.imgur.com/ZCa2Wog.png)
