@@ -44,6 +44,7 @@
 #define     CONFSTR_WF_MIX_TO_MONO       "waveform.mix_to_mono"
 #define     CONFSTR_WF_DISPLAY_RMS       "waveform.display_rms"
 #define     CONFSTR_WF_RENDER_METHOD     "waveform.render_method"
+#define     CONFSTR_WF_FILL_WAVEFORM     "waveform.fill_waveform"
 #define     CONFSTR_WF_SOUNDCLOUD_STYLE  "waveform.soundcloud_style"
 #define     CONFSTR_WF_SHADE_WAVEFORM    "waveform.shade_waveform"
 #define     CONFSTR_WF_BG_COLOR_R        "waveform.bg_color_r"
@@ -88,6 +89,7 @@ extern guint16  CONFIG_FG_ALPHA;
 extern guint16  CONFIG_PB_ALPHA;
 extern guint16  CONFIG_FG_RMS_ALPHA;
 extern gint     CONFIG_RENDER_METHOD;
+extern gint     CONFIG_FILL_WAVEFORM;
 extern gint     CONFIG_BORDER_WIDTH;
 extern gint     CONFIG_CURSOR_WIDTH;
 extern gint     CONFIG_FONT_SIZE;

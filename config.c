@@ -54,6 +54,7 @@ guint16  CONFIG_FG_ALPHA;
 guint16  CONFIG_PB_ALPHA;
 guint16  CONFIG_FG_RMS_ALPHA;
 gint     CONFIG_RENDER_METHOD = SPIKES;
+gint     CONFIG_FILL_WAVEFORM = 1;
 gint     CONFIG_BORDER_WIDTH = 1;
 gint     CONFIG_CURSOR_WIDTH = 3;
 gint     CONFIG_FONT_SIZE = 18;
@@ -70,6 +71,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_SHADE_WAVEFORM,      CONFIG_SHADE_WAVEFORM);
     deadbeef->conf_set_int (CONFSTR_WF_SOUNDCLOUD_STYLE,    CONFIG_SOUNDCLOUD_STYLE);
     deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
+    deadbeef->conf_set_int (CONFSTR_WF_FILL_WAVEFORM,       CONFIG_FILL_WAVEFORM);
     deadbeef->conf_set_int (CONFSTR_WF_BORDER_WIDTH,        CONFIG_BORDER_WIDTH);
     deadbeef->conf_set_int (CONFSTR_WF_CURSOR_WIDTH,        CONFIG_CURSOR_WIDTH);
     deadbeef->conf_set_int (CONFSTR_WF_FONT_SIZE,           CONFIG_FONT_SIZE);
@@ -106,6 +108,7 @@ load_config (void)
     CONFIG_SHADE_WAVEFORM = deadbeef->conf_get_int (CONFSTR_WF_SHADE_WAVEFORM,       FALSE);
     CONFIG_SOUNDCLOUD_STYLE = deadbeef->conf_get_int (CONFSTR_WF_SOUNDCLOUD_STYLE,   FALSE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);
+    CONFIG_FILL_WAVEFORM = deadbeef->conf_get_int (CONFSTR_WF_FILL_WAVEFORM,             1);
     CONFIG_BORDER_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_BORDER_WIDTH,               1);
     CONFIG_CURSOR_WIDTH = deadbeef->conf_get_int (CONFSTR_WF_CURSOR_WIDTH,               3);
     CONFIG_FONT_SIZE = deadbeef->conf_get_int (CONFSTR_WF_FONT_SIZE,                    18);

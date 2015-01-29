@@ -79,6 +79,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     GtkWidget *render_method_spikes;
     GtkWidget *render_method_bars;
     GtkWidget *shade_waveform;
+    GtkWidget *fill_waveform;
     GtkWidget *soundcloud_style;
     GtkWidget *dialog_action_area13;
     GtkWidget *applybutton1;
@@ -172,6 +173,10 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     gtk_widget_show (render_method_bars);
     gtk_box_pack_start (GTK_BOX (vbox02), render_method_bars, TRUE, TRUE, 0);
 
+    fill_waveform = gtk_check_button_new_with_label ("Fill waveform");
+    gtk_widget_show (fill_waveform);
+    gtk_box_pack_start (GTK_BOX (vbox02), fill_waveform, TRUE, TRUE, 0);
+
     soundcloud_style = gtk_check_button_new_with_label ("Soundcloud style");
     gtk_widget_show (soundcloud_style);
     gtk_box_pack_start (GTK_BOX (vbox02), soundcloud_style, TRUE, TRUE, 0);
@@ -225,6 +230,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (display_rms), CONFIG_DISPLAY_RMS);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (shade_waveform), CONFIG_SHADE_WAVEFORM);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (soundcloud_style), CONFIG_SOUNDCLOUD_STYLE);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (fill_waveform), CONFIG_FILL_WAVEFORM);
 
     gtk_widget_set_sensitive (display_rms, !CONFIG_SOUNDCLOUD_STYLE);
 
@@ -253,6 +259,7 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
             CONFIG_DISPLAY_RMS = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (display_rms));
             CONFIG_SHADE_WAVEFORM = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (shade_waveform));
             CONFIG_SOUNDCLOUD_STYLE = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (soundcloud_style));
+            CONFIG_FILL_WAVEFORM = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (fill_waveform));
             gtk_widget_set_sensitive (display_rms, !CONFIG_SOUNDCLOUD_STYLE);
             if (gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (render_method_spikes)) == TRUE) {
                 CONFIG_RENDER_METHOD = SPIKES;

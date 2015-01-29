@@ -252,6 +252,7 @@ draw_cairo_line_path (cairo_t* cr, DRECT *pts, const COLOUR *c)
 static inline void
 draw_cairo_line (cairo_t* cr, DRECT *pts, const COLOUR *c)
 {
+    cairo_set_source_rgba (cr, C_COLOUR (c));
     cairo_move_to (cr, pts->x1, pts->y1);
     cairo_line_to (cr, pts->x2, pts->y2);
     cairo_stroke (cr);
@@ -604,9 +605,15 @@ waveform_draw (void *user_data, int shaded)
             /* Draw Foreground - line */
             if (CONFIG_RENDER_METHOD == SPIKES) {
                 DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
-                draw_cairo_line_path (min_cr, &pts0, &color_fg);
                 DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
-                draw_cairo_line_path (max_cr, &pts1, &color_fg);
+                if (CONFIG_FILL_WAVEFORM == 1) {
+                    draw_cairo_line_path (min_cr, &pts0, &color_fg);
+                    draw_cairo_line_path (max_cr, &pts1, &color_fg);
+                }
+                else {
+                    draw_cairo_line (min_cr, &pts0, &color_fg);
+                    draw_cairo_line (max_cr, &pts1, &color_fg);
+                }
             }
             else if (CONFIG_RENDER_METHOD == BARS) {
                 DRECT pts0 = { left + x, top + yoff, left + x, top + yoff - min };
@@ -618,9 +625,15 @@ waveform_draw (void *user_data, int shaded)
             if (!CONFIG_SOUNDCLOUD_STYLE) {
                 if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == SPIKES) {
                     DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
-                    draw_cairo_line_path (rms_min_cr, &pts0, &color_rms);
                     DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
-                    draw_cairo_line_path (rms_max_cr, &pts1, &color_rms);
+                    if (CONFIG_FILL_WAVEFORM == 1) {
+                        draw_cairo_line_path (rms_min_cr, &pts0, &color_rms);
+                        draw_cairo_line_path (rms_max_cr, &pts1, &color_rms);
+                    }
+                    else {
+                        draw_cairo_line (rms_min_cr, &pts0, &color_rms);
+                        draw_cairo_line (rms_max_cr, &pts1, &color_rms);
+                    }
                 }
                 else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
                     DRECT pts0 = { left + x, top + yoff, left + x, top + yoff - rms };
@@ -639,7 +652,7 @@ waveform_draw (void *user_data, int shaded)
             samples_per_buf = samples_per_buf > (max_samples_per_x * samples_size) ? (max_samples_per_x * samples_size) : samples_per_buf;
             samples_per_buf = samples_per_buf + ((samples_size) - (samples_per_buf % samples_size));
         }
-        if (CONFIG_RENDER_METHOD == SPIKES) {
+        if (CONFIG_RENDER_METHOD == SPIKES && CONFIG_FILL_WAVEFORM) {
             double right = floor (left + width + 0.5);
             cairo_line_to (max_cr, right, center);
             cairo_line_to (min_cr, right, center);
