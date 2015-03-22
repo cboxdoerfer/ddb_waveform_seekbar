@@ -955,7 +955,6 @@ waveform_get_wavedata (gpointer user_data)
                 DB_playItem_t *playing = deadbeef->streamer_get_playing_track ();
                 if (playing && it && it == playing) {
                     deadbeef->mutex_lock (w->mutex);
-                    printf("%d, %d\n",(int)wavedata->data_len, (int)w->max_buffer_len);
                     memcpy (w->wave->data, wavedata->data, wavedata->data_len * sizeof (short));
                     w->wave->data_len = wavedata->data_len;
                     w->wave->channels = wavedata->channels;
