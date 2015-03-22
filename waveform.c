@@ -49,6 +49,7 @@
 #define VALUES_PER_SAMPLE (3)
 #define MAX_CHANNELS (6)
 #define MAX_SAMPLES (4096)
+#define DISTANCE_THRESHOLD (100)
 
 
 /* Global variables */
@@ -1050,7 +1051,15 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
 
-    if (w->seekbar_moving) {
+    if (w->seekbar_moving || w->seekbar_move_x_clicked) {
+        if (event->x < -DISTANCE_THRESHOLD
+            || event->x > a.width + DISTANCE_THRESHOLD
+            || event->y < -DISTANCE_THRESHOLD
+            || event->y > a.height + DISTANCE_THRESHOLD) {
+            w->seekbar_moving = 0;
+            return TRUE;
+        }
+        w->seekbar_moving = 1;
         w->seekbar_move_x = event->x - a.x;
         gtk_widget_queue_draw (widget);
     }
@@ -1115,17 +1124,19 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
         deadbeef->sendmessage (DB_EV_TOGGLE_PAUSE, 0, 0, 0);
         return TRUE;
     }
-    w->seekbar_moving = 0;
     w->seekbar_move_x_clicked = 0;
-    DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
-    if (trk) {
-        GtkAllocation a;
-        gtk_widget_get_allocation (w->drawarea, &a);
-        const float time = MAX (0, (event->x - a.x) * deadbeef->pl_get_item_duration (trk) / (a.width) * 1000.f);
-        deadbeef->sendmessage (DB_EV_SEEK, 0, time, 0);
-        deadbeef->pl_item_unref (trk);
+    if (w->seekbar_moving) {
+        DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
+        if (trk) {
+            GtkAllocation a;
+            gtk_widget_get_allocation (w->drawarea, &a);
+            const float time = MAX (0, (event->x - a.x) * deadbeef->pl_get_item_duration (trk) / (a.width) * 1000.f);
+            deadbeef->sendmessage (DB_EV_SEEK, 0, time, 0);
+            deadbeef->pl_item_unref (trk);
+        }
+        gtk_widget_queue_draw (widget);
     }
-    gtk_widget_queue_draw (widget);
+    w->seekbar_moving = 0;
     return TRUE;
 }
 
