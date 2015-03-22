@@ -59,6 +59,9 @@ static ddb_gtkui_t *        gtkui_plugin = NULL;
 static char cache_path[PATH_MAX];
 static int cache_path_size;
 
+static enum PLAYBACK_STATUS { STOPPED = 0, PLAYING = 1, PAUSED = 2 };
+static int playback_status = STOPPED;
+
 typedef struct wavedata_s
 {
     char *fname;
@@ -299,6 +302,9 @@ static void
 waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
 {
     waveform_t *w = user_data;
+    if (playback_status == STOPPED) {
+        return;
+    }
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
@@ -734,6 +740,9 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
     }
     deadbeef->pl_unlock ();
 
+    wavedata->data_len = 0;
+    wavedata->channels = 0;
+
     if (dec) {
         fileinfo = dec->open (0);
         if (fileinfo && dec->init (fileinfo, DB_PLAYITEM (it)) != 0) {
@@ -746,7 +755,11 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
         float *buffer;
 
         if (fileinfo) {
-            const int nsamples_per_channel = (int)deadbeef->pl_get_item_duration (it) * fileinfo->fmt.samplerate;
+            const float duration = deadbeef->pl_get_item_duration (it);
+            if (duration <= 0) {
+                goto out;
+            }
+            const int nsamples_per_channel = (int)duration * fileinfo->fmt.samplerate;
             const int samples_per_buf = floorf ((float) nsamples_per_channel / (float) width);
             const int max_samples_per_buf = 1 + samples_per_buf;
             const int bytes_per_sample = fileinfo->fmt.bps / 8;
@@ -941,6 +954,7 @@ waveform_get_wavedata (gpointer user_data)
                 DB_playItem_t *playing = deadbeef->streamer_get_playing_track ();
                 if (playing && it && it == playing) {
                     deadbeef->mutex_lock (w->mutex);
+                    printf("%d, %d\n",(int)wavedata->data_len, (int)w->max_buffer_len);
                     memcpy (w->wave->data, wavedata->data, wavedata->data_len * sizeof (short));
                     w->wave->data_len = wavedata->data_len;
                     w->wave->channels = wavedata->channels;
@@ -995,6 +1009,12 @@ static void
 waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
     waveform_t *w = user_data;
+    if (playback_status != PLAYING) {
+        if (w->drawtimer) {
+            g_source_remove (w->drawtimer);
+            w->drawtimer = 0;
+        }
+    }
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
@@ -1118,6 +1138,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
     switch (id) {
     case DB_EV_SONGSTARTED:
         //ddb_event_track_t *ev (ddb_event_track_t *)ctx;
+        playback_status = PLAYING;
         deadbeef->mutex_lock (w->mutex);
         memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
         w->wave->data_len = 0;
@@ -1127,33 +1148,29 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         g_idle_add (waveform_redraw_cb, w);
         tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
-        deadbeef->thread_detach (tid);
+        if (tid) {
+            deadbeef->thread_detach (tid);
+        }
         break;
     case DB_EV_STOP:
+        playback_status = STOPPED;
         deadbeef->mutex_lock (w->mutex);
         memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
         w->wave->data_len = 0;
         w->wave->channels = 0;
         deadbeef->mutex_unlock (w->mutex);
-        if (w->drawtimer) {
-            g_source_remove (w->drawtimer);
-            w->drawtimer = 0;
-        }
         g_idle_add (waveform_redraw_cb, w);
-        gtk_widget_queue_draw (w->drawarea);
         break;
     case DB_EV_CONFIGCHANGED:
         on_config_changed (w);
         break;
     case DB_EV_PAUSED:
         if (deadbeef->get_output ()->state () == OUTPUT_STATE_PLAYING) {
+            playback_status = PLAYING;
             waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         }
         else {
-            if (w->drawtimer) {
-                g_source_remove (w->drawtimer);
-                w->drawtimer = 0;
-            }
+            playback_status = PAUSED;
         }
         break;
     }
@@ -1240,6 +1257,7 @@ waveform_init (ddb_gtkui_widget_t *w)
 
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     if (it) {
+        playback_status = PLAYING;
         intptr_t tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         deadbeef->thread_detach (tid);
         deadbeef->pl_item_unref (it);
