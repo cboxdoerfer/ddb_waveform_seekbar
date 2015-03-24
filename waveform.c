@@ -757,14 +757,22 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 
         if (fileinfo) {
             const float duration = deadbeef->pl_get_item_duration (it);
+            const int num_updates = MAX (1, floorf (duration)/30);
+            const int update_after_nsamples = width/num_updates;
             if (duration <= 0) {
                 goto out;
             }
-            const int nsamples_per_channel = (int)duration * fileinfo->fmt.samplerate;
-            const int samples_per_buf = floorf ((float) nsamples_per_channel / (float) width);
-            const int max_samples_per_buf = 1 + samples_per_buf;
             const int bytes_per_sample = fileinfo->fmt.bps / 8;
             const int samplesize = fileinfo->fmt.channels * bytes_per_sample;
+            const int nsamples_per_channel = floorf (duration * (float)fileinfo->fmt.samplerate);
+            const int samples_per_buf = ceilf ((float) nsamples_per_channel / (float) width);
+            const int max_samples_per_buf = 1 + samples_per_buf;
+
+            w->wave->channels = fileinfo->fmt.channels;
+            w->wave->data_len = w->wave->channels * 3 * CONFIG_NUM_SAMPLES;
+            deadbeef->mutex_lock (w->mutex);
+            memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
+            deadbeef->mutex_unlock (w->mutex);
 
             data = malloc (sizeof (float) * max_samples_per_buf * samplesize);
             if (!data) {
@@ -790,6 +798,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                 .is_bigendian = 0
             };
 
+            int update_counter = 0;
             int eof = 0;
             int counter = 0;
             const long buffer_len = samples_per_buf * samplesize;
@@ -809,7 +818,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 
                 for (int ch = 0; ch < fileinfo->fmt.channels; ch++) {
                     min = 1.0; max = -1.0; rms = 0.0;
-                    for (sample = 0; sample < sz/(bytes_per_sample*fileinfo->fmt.channels); sample++) {
+                    for (sample = 0; sample < sz/samplesize; sample++) {
                         if (sample * fileinfo->fmt.channels > buffer_len) {
                             fprintf (stderr, "index error!\n");
                             break;
@@ -826,10 +835,25 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                     wavedata->data[counter+2] = (short)(rms*1000);
                     counter += 3;
                 }
+                if (update_counter == update_after_nsamples) {
+                    DB_playItem_t *playing = deadbeef->streamer_get_playing_track ();
+                    if (playing) {
+                        if (playing == it) {
+                            deadbeef->mutex_lock (w->mutex);
+                            memcpy (w->wave->data, wavedata->data, counter * sizeof (short));
+                            deadbeef->mutex_unlock (w->mutex);
+                            g_idle_add (waveform_redraw_cb, w);
+                        }
+                        deadbeef->pl_item_unref (playing);
+                    }
+                    update_counter = 0;
+                }
+                update_counter++;
             }
             wavedata->fname = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
             wavedata->data_len = counter;
             wavedata->channels = fileinfo->fmt.channels;
+
 
             if (data) {
                 free (data);
