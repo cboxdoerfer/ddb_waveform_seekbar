@@ -1326,7 +1326,7 @@ waveform_create (void)
     w->mutex = deadbeef->mutex_create ();
     w->mutex_rendering = deadbeef->mutex_create ();
     //mutex = deadbeef->mutex_create ();
-    gtk_widget_set_size_request (w->base.widget, 200, 48);
+    gtk_widget_set_size_request (w->base.widget, 300, 96);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->frame);
     gtk_container_add (GTK_CONTAINER (w->frame), w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->popup), w->popup_item);
