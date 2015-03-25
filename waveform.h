@@ -27,8 +27,8 @@
 #ifndef WAVEFORM_HEADER
 #define WAVEFORM_HEADER
 
-#define trace(...) { fprintf(stderr, __VA_ARGS__); }
-//#define trace(fmt,...)
+//#define trace(...) { fprintf(stderr, __VA_ARGS__); }
+#define trace(fmt,...)
 
 extern DB_functions_t *     deadbeef;
 

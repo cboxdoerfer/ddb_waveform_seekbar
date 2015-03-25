@@ -43,7 +43,7 @@ typedef struct cache_query_s
     struct cache_query_s *next;
 } cache_query_t;
 
-static uintptr_t mutex;
+static uintptr_t mutex = NULL;
 static cache_query_t *queue;
 static cache_query_t *queue_tail;
 
@@ -73,16 +73,19 @@ check_dir (const char *dir, mode_t mode)
     return 1;
 }
 
-void
+int
 queue_add (const char *fname)
 {
+    if (!mutex) {
+        mutex = deadbeef->mutex_create ();
+    }
     deadbeef->mutex_lock (mutex);
     for (cache_query_t *q = queue; q; q = q->next) {
         if (!strcmp (fname, q->fname)) {
             // already queued
             trace ("waveform: already queued. (%s)\n",fname);
             deadbeef->mutex_unlock (mutex);
-            return;
+            return 0;
         }
     }
     cache_query_t *q = malloc (sizeof (cache_query_t));
@@ -97,19 +100,24 @@ queue_add (const char *fname)
     }
     trace ("waveform: queued. (%s)\n",fname);
     deadbeef->mutex_unlock (mutex);
+    return 1;
 }
 
 void
-queue_pop (void)
+queue_pop (const char *fname)
 {
     deadbeef->mutex_lock (mutex);
-    cache_query_t *next = queue ? queue->next : NULL;
-    if (queue) {
-        if (queue->fname) {
-            trace ("waveform: removed from queue. (%s)\n",queue->fname);
-            free (queue->fname);
+    cache_query_t *next = NULL;
+    for (cache_query_t *q = queue; q; q = q->next) {
+        if (!strcmp (fname, q->fname)) {
+            next = q->next;
+            if (q->fname) {
+                trace ("waveform: removed from queue. (%s)\n",q->fname);
+                free (q->fname);
+            }
+            free (q);
+            break;
         }
-        free (queue);
     }
     queue = next;
     if (!queue) {
@@ -117,4 +125,3 @@ queue_pop (void)
     }
     deadbeef->mutex_unlock (mutex);
 }
-

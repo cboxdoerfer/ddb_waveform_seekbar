@@ -38,10 +38,10 @@
 int
 check_dir (const char *dir, mode_t mode);
 
-void
+int
 queue_add (const char *fname);
 
 void
-queue_pop (void);
+queue_pop (const char *fname);
 
 #endif

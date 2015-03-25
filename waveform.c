@@ -840,6 +840,9 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                     if (playing) {
                         if (playing == it) {
                             deadbeef->mutex_lock (w->mutex);
+                            w->wave->channels = fileinfo->fmt.channels;
+                            w->wave->data_len = w->wave->channels * 3 * CONFIG_NUM_SAMPLES;
+                            memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
                             memcpy (w->wave->data, wavedata->data, counter * sizeof (short));
                             deadbeef->mutex_unlock (w->mutex);
                             g_idle_add (waveform_redraw_cb, w);
@@ -965,7 +968,7 @@ waveform_get_wavedata (gpointer user_data)
                 waveform_get_from_cache (w, it, uri);
                 g_idle_add (waveform_redraw_cb, w);
             }
-            else {
+            else if (queue_add (uri)) {
                 wavedata_t *wavedata = malloc (sizeof (wavedata_t));
                 wavedata->data = malloc (sizeof (short) * w->max_buffer_len);
                 memset (wavedata->data, 0, sizeof (short) * w->max_buffer_len);
@@ -975,6 +978,7 @@ waveform_get_wavedata (gpointer user_data)
                 if (CONFIG_CACHE_ENABLED) {
                     waveform_db_cache (w, it, wavedata);
                 }
+                queue_pop (uri);
 
                 DB_playItem_t *playing = deadbeef->streamer_get_playing_track ();
                 if (playing && it && it == playing) {
@@ -1173,11 +1177,11 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
     case DB_EV_SONGSTARTED:
         //ddb_event_track_t *ev (ddb_event_track_t *)ctx;
         playback_status = PLAYING;
-        deadbeef->mutex_lock (w->mutex);
-        memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
-        w->wave->data_len = 0;
-        w->wave->channels = 0;
-        deadbeef->mutex_unlock (w->mutex);
+        //deadbeef->mutex_lock (w->mutex);
+        //memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
+        //w->wave->data_len = 0;
+        //w->wave->channels = 0;
+        //deadbeef->mutex_unlock (w->mutex);
         //queue_add (deadbeef->pl_find_meta_raw (ev->track, ":URI"));
         waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         g_idle_add (waveform_redraw_cb, w);
