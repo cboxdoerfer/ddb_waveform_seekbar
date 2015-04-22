@@ -1085,14 +1085,14 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
 
         int bar_h = 11;
 
-        int steps = MAX (1, floorf (duration/values[0]));
+        int steps = floorf (duration/values[0]);
         int pos = 0;
-        while (a.width/steps > 3) {
-            if (steps > 1) {
+        while (a.width/MAX (1, steps) > 3) {
+            if (steps > 0) {
                 for (int i = 1; i <= steps; i++) {
                     const float time = i*values[pos];
                     int stop = 0;
-                    for (int j = 0; pos > 1 && j < pos; j++) {
+                    for (int j = 0; j < pos; j++) {
                         if (fmod (i * values[pos], values[j]) == 0.f) {
                             //printf("%f, %f\n", values[j], i * values[pos]);
                             stop = 1;
@@ -1104,7 +1104,7 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
                     cairo_move_to (cr, rel * time, a.height);
                     cairo_line_to (cr, rel * time, a.height - bar_h);
                     cairo_stroke (cr);
-                    if (duration > 2.f && a.width/steps > 80) { 
+                    if (duration > 2.f && a.width/steps > 50) { 
                         const int hr = time/3600;
                         const int mn = (time-hr*3600)/60;
                         const int sc = time-hr*3600-mn*60;
@@ -1121,13 +1121,11 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
                         cairo_show_text (cr, text);
                     }
                 }
-                if (steps > 0) {
-                    bar_h -= 3;
-                }
+                bar_h -= 3;
             }
             pos++;
             if (pos <= sizeof (values) - 1) {
-                steps = MAX (1, floorf (duration/values[pos]));
+                steps = floorf (duration/values[pos]);
             }
             else {
                 break;
