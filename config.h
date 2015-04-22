@@ -43,6 +43,7 @@
 #define     CONFSTR_WF_LOG_ENABLED       "waveform.log_enabled"
 #define     CONFSTR_WF_MIX_TO_MONO       "waveform.mix_to_mono"
 #define     CONFSTR_WF_DISPLAY_RMS       "waveform.display_rms"
+#define     CONFSTR_WF_DISPLAY_RULER     "waveform.display_ruler"
 #define     CONFSTR_WF_RENDER_METHOD     "waveform.render_method"
 #define     CONFSTR_WF_FILL_WAVEFORM     "waveform.fill_waveform"
 #define     CONFSTR_WF_SOUNDCLOUD_STYLE  "waveform.soundcloud_style"
@@ -78,6 +79,7 @@ extern gboolean CONFIG_MIX_TO_MONO;
 extern gboolean CONFIG_CACHE_ENABLED;
 extern gboolean CONFIG_SCROLL_ENABLED;
 extern gboolean CONFIG_DISPLAY_RMS;
+extern gboolean CONFIG_DISPLAY_RULER;
 extern gboolean CONFIG_SHADE_WAVEFORM;
 extern gboolean CONFIG_SOUNDCLOUD_STYLE;
 extern GdkColor CONFIG_BG_COLOR;

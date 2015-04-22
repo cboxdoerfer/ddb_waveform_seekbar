@@ -43,6 +43,7 @@ gboolean CONFIG_MIX_TO_MONO = FALSE;
 gboolean CONFIG_CACHE_ENABLED = TRUE;
 gboolean CONFIG_SCROLL_ENABLED = TRUE;
 gboolean CONFIG_DISPLAY_RMS = TRUE;
+gboolean CONFIG_DISPLAY_RULER = FALSE;
 gboolean CONFIG_SHADE_WAVEFORM = FALSE;
 gboolean CONFIG_SOUNDCLOUD_STYLE = FALSE;
 GdkColor CONFIG_BG_COLOR;
@@ -68,6 +69,7 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_LOG_ENABLED,         CONFIG_LOG_ENABLED);
     deadbeef->conf_set_int (CONFSTR_WF_MIX_TO_MONO,         CONFIG_MIX_TO_MONO);
     deadbeef->conf_set_int (CONFSTR_WF_DISPLAY_RMS,         CONFIG_DISPLAY_RMS);
+    deadbeef->conf_set_int (CONFSTR_WF_DISPLAY_RULER,       CONFIG_DISPLAY_RULER);
     deadbeef->conf_set_int (CONFSTR_WF_SHADE_WAVEFORM,      CONFIG_SHADE_WAVEFORM);
     deadbeef->conf_set_int (CONFSTR_WF_SOUNDCLOUD_STYLE,    CONFIG_SOUNDCLOUD_STYLE);
     deadbeef->conf_set_int (CONFSTR_WF_RENDER_METHOD,       CONFIG_RENDER_METHOD);
@@ -105,6 +107,7 @@ load_config (void)
     CONFIG_LOG_ENABLED = deadbeef->conf_get_int (CONFSTR_WF_LOG_ENABLED,             FALSE);
     CONFIG_MIX_TO_MONO = deadbeef->conf_get_int (CONFSTR_WF_MIX_TO_MONO,             FALSE);
     CONFIG_DISPLAY_RMS = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RMS,              TRUE);
+    CONFIG_DISPLAY_RULER = deadbeef->conf_get_int (CONFSTR_WF_DISPLAY_RULER,         FALSE);
     CONFIG_SHADE_WAVEFORM = deadbeef->conf_get_int (CONFSTR_WF_SHADE_WAVEFORM,       FALSE);
     CONFIG_SOUNDCLOUD_STYLE = deadbeef->conf_get_int (CONFSTR_WF_SOUNDCLOUD_STYLE,   FALSE);
     CONFIG_RENDER_METHOD = deadbeef->conf_get_int (CONFSTR_WF_RENDER_METHOD,        SPIKES);

@@ -77,6 +77,7 @@ typedef struct
     GtkWidget *popup;
     GtkWidget *popup_item;
     GtkWidget *drawarea;
+    GtkWidget *ruler;
     GtkWidget *frame;
     guint drawtimer;
     guint resizetimer;
@@ -125,6 +126,14 @@ on_config_changed (void *widget)
             break;
         case 1:
             gtk_frame_set_shadow_type ((GtkFrame *)w->frame, GTK_SHADOW_IN);
+            break;
+    }
+    switch (CONFIG_DISPLAY_RULER) {
+        case 0:
+            gtk_widget_hide (w->ruler);
+            break;
+        case 1:
+            gtk_widget_show (w->ruler);
             break;
     }
 
@@ -268,6 +277,14 @@ draw_cairo_rectangle (cairo_t *cr, const GdkColor *c, int alpha, float x, int y,
     cairo_set_source_rgba (cr, c->red/65535.f, c->green/65535.f, c->blue/65535.f, alpha/65535.f);
     cairo_rectangle (cr, x, y, width, height);
     cairo_fill (cr);
+}
+
+static gboolean
+ruler_redraw_cb (void *user_data)
+{
+    waveform_t *w = user_data;
+    gtk_widget_queue_draw (w->ruler);
+    return FALSE;
 }
 
 static gboolean
@@ -1034,6 +1051,94 @@ waveform_set_refresh_interval (gpointer user_data, int interval)
 }
 
 static void
+ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
+{
+    //printf("ruler: expose event\n");
+    waveform_t *w = user_data;
+    GtkAllocation a;
+    gtk_widget_get_allocation (w->ruler, &a);
+    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->ruler));
+
+    const int x = 0;
+    const int y = 0;
+    const int width = a.width;
+    const int height = a.height;
+    draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, width, height);
+    cairo_set_antialias (cr, CAIRO_ANTIALIAS_NONE);
+    cairo_set_line_width (cr, 1);
+    cairo_set_source_rgba (cr, 0.2, 0.2, 0.2, 1);
+    cairo_move_to (cr, 0, a.height);
+    cairo_line_to (cr, a.width, a.height);
+    cairo_stroke (cr);
+
+    DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
+    if (trk) {
+        const float duration = deadbeef->pl_get_item_duration (trk);
+        const float rel = (float)a.width/duration;
+        float values[] = {3600.f, 1800.f, 600.f, 60.f, 30.f, 10.f, 5.f, 1.f, 0.5f, 0.1f};
+
+        char text[100];
+        snprintf (text, sizeof (text), "%f", duration);
+        cairo_set_font_size (cr, 8);
+        cairo_text_extents_t ex;
+        cairo_text_extents (cr, text, &ex);
+
+        int bar_h = 11;
+
+        int steps = MAX (1, floorf (duration/values[0]));
+        int pos = 0;
+        while (a.width/steps > 3) {
+            if (steps > 1) {
+                for (int i = 1; i <= steps; i++) {
+                    const float time = i*values[pos];
+                    int stop = 0;
+                    for (int j = 0; pos > 1 && j < pos; j++) {
+                        if (fmod (i * values[pos], values[j]) == 0.f) {
+                            //printf("%f, %f\n", values[j], i * values[pos]);
+                            stop = 1;
+                        }
+                    }
+                    if (stop) {
+                        continue;
+                    }
+                    cairo_move_to (cr, rel * time, a.height);
+                    cairo_line_to (cr, rel * time, a.height - bar_h);
+                    cairo_stroke (cr);
+                    if (duration > 2.f && a.width/steps > 80) { 
+                        const int hr = time/3600;
+                        const int mn = (time-hr*3600)/60;
+                        const int sc = time-hr*3600-mn*60;
+
+                        if (hr > 0) {
+                            snprintf (text, sizeof (text), "%d:%02d:%02d", hr, mn, sc);
+                        }
+                        else {
+                            snprintf (text, sizeof (text), "%d:%02d", mn, sc);
+                        }
+                        const int text_x = rel * time + 2;
+                        const int text_y = a.height - 6;
+                        cairo_move_to (cr, text_x, text_y);
+                        cairo_show_text (cr, text);
+                    }
+                }
+                if (steps > 0) {
+                    bar_h -= 3;
+                }
+            }
+            pos++;
+            if (pos <= sizeof (values) - 1) {
+                steps = MAX (1, floorf (duration/values[pos]));
+            }
+            else {
+                break;
+            }
+        }
+        deadbeef->pl_item_unref (trk);
+    }
+    cairo_destroy (cr);
+}
+
+static void
 waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
     waveform_t *w = user_data;
@@ -1088,7 +1193,7 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
         }
         w->seekbar_moving = 1;
         w->seekbar_move_x = event->x - a.x;
-        gtk_widget_queue_draw (widget);
+        gtk_widget_queue_draw (w->drawarea);
     }
     return TRUE;
 }
@@ -1185,6 +1290,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         //queue_add (deadbeef->pl_find_meta_raw (ev->track, ":URI"));
         waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         g_idle_add (waveform_redraw_cb, w);
+        g_idle_add (ruler_redraw_cb, w);
         tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
         if (tid) {
             deadbeef->thread_detach (tid);
@@ -1320,6 +1426,8 @@ waveform_create (void)
     w->base.destroy = waveform_destroy;
     w->base.message = waveform_message;
     w->drawarea = gtk_drawing_area_new ();
+    w->ruler = gtk_drawing_area_new ();
+    GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
     w->frame = gtk_frame_new (NULL);
     w->popup = gtk_menu_new ();
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
@@ -1327,18 +1435,30 @@ waveform_create (void)
     w->mutex_rendering = deadbeef->mutex_create ();
     //mutex = deadbeef->mutex_create ();
     gtk_widget_set_size_request (w->base.widget, 300, 96);
+    gtk_widget_set_size_request (w->ruler, -1, 12);
+    gtk_widget_set_size_request (w->drawarea, -1, -1);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->frame);
-    gtk_container_add (GTK_CONTAINER (w->frame), w->drawarea);
+    gtk_container_add (GTK_CONTAINER (w->frame), vbox);
+    gtk_container_add (GTK_CONTAINER (vbox), w->ruler);
+    gtk_container_add (GTK_CONTAINER (vbox), w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->popup), w->popup_item);
+    gtk_box_set_child_packing (GTK_BOX (vbox), w->ruler, FALSE, TRUE, 0, 0);
     gtk_widget_show (w->drawarea);
+    gtk_widget_show (vbox);
     gtk_widget_show (w->frame);
     gtk_widget_show (w->popup);
+    gtk_widget_show (w->ruler);
     gtk_widget_show (w->popup_item);
 
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect_after ((gpointer) w->drawarea, "expose_event", G_CALLBACK (waveform_expose_event), w);
 #else
     g_signal_connect_after ((gpointer) w->drawarea, "draw", G_CALLBACK (waveform_expose_event), w);
+#endif
+#if !GTK_CHECK_VERSION(3,0,0)
+    g_signal_connect_after ((gpointer) w->ruler, "expose_event", G_CALLBACK (ruler_expose_event), w);
+#else
+    g_signal_connect_after ((gpointer) w->ruler, "draw", G_CALLBACK (ruler_expose_event), w);
 #endif
     g_signal_connect_after ((gpointer) w->drawarea, "configure_event", G_CALLBACK (waveform_configure_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (waveform_button_press_event), w);
