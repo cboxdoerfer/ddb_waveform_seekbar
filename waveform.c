@@ -1053,7 +1053,6 @@ waveform_set_refresh_interval (gpointer user_data, int interval)
 static void
 ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
-    //printf("ruler: expose event\n");
     waveform_t *w = user_data;
     GtkAllocation a;
     gtk_widget_get_allocation (w->ruler, &a);
@@ -1075,7 +1074,7 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
     if (trk) {
         const float duration = deadbeef->pl_get_item_duration (trk);
         const float rel = (float)a.width/duration;
-        float values[] = {3600.f, 1800.f, 600.f, 60.f, 30.f, 10.f, 5.f, 1.f, 0.5f, 0.1f};
+        const float values[] = {3600.f, 1800.f, 600.f, 60.f, 30.f, 10.f, 5.f, 1.f, 0.5f, 0.1f};
 
         char text[100];
         snprintf (text, sizeof (text), "%f", duration);
@@ -1083,18 +1082,18 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
         cairo_text_extents_t ex;
         cairo_text_extents (cr, text, &ex);
 
-        int bar_h = 11;
+        int bar_h = 12;
 
         int steps = floorf (duration/values[0]);
         int pos = 0;
         while (a.width/MAX (1, steps) > 3) {
             if (steps > 0) {
+                float prev_time = 0.f;
                 for (int i = 1; i <= steps; i++) {
                     const float time = i*values[pos];
                     int stop = 0;
                     for (int j = 0; j < pos; j++) {
-                        if (fmod (i * values[pos], values[j]) == 0.f) {
-                            //printf("%f, %f\n", values[j], i * values[pos]);
+                        if (fmod (time, values[j]) == 0.f) {
                             stop = 1;
                         }
                     }
@@ -1104,16 +1103,26 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
                     cairo_move_to (cr, rel * time, a.height);
                     cairo_line_to (cr, rel * time, a.height - bar_h);
                     cairo_stroke (cr);
+
+                    if (prev_time == time) {
+                        continue;
+                    }
+                    prev_time = time;
+
                     if (duration > 2.f && a.width/steps > 50) { 
                         const int hr = time/3600;
                         const int mn = (time-hr*3600)/60;
                         const int sc = time-hr*3600-mn*60;
+                        const int ms = (time-hr*3600-mn*60-sc)*10;
 
                         if (hr > 0) {
                             snprintf (text, sizeof (text), "%d:%02d:%02d", hr, mn, sc);
                         }
-                        else {
+                        else if (duration > 20) {
                             snprintf (text, sizeof (text), "%d:%02d", mn, sc);
+                        }
+                        else {
+                            snprintf (text, sizeof (text), "%2d,%d", sc, ms);
                         }
                         const int text_x = rel * time + 2;
                         const int text_y = a.height - 6;
@@ -1124,7 +1133,7 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
                 bar_h -= 3;
             }
             pos++;
-            if (pos <= sizeof (values) - 1) {
+            if (pos < sizeof (values)/sizeof (float)) {
                 steps = floorf (duration/values[pos]);
             }
             else {
