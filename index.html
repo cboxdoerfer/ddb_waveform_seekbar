@@ -1,1 +1,131 @@
-My Page
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Waveform Seekbar Plugin by cboxdoerfer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Waveform Seekbar Plugin</h1>
+      <h2 class="project-tagline">Waveform Seekbar plugin for DeaDBeeF audio player</h2>
+      <a href="https://github.com/cboxdoerfer/ddb_waveform_seekbar" class="btn">View on GitHub</a>
+      <a href="https://github.com/cboxdoerfer/ddb_waveform_seekbar/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/cboxdoerfer/ddb_waveform_seekbar/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h2>
+<a id="table-of-contents" class="anchor" href="#table-of-contents" aria-hidden="true"><span class="octicon octicon-link"></span></a>Table of Contents</h2>
+
+<ul>
+<li>
+<a href="#installation">Installation</a>
+
+<ul>
+<li><a href="#arch-linux">Arch Linux</a></li>
+<li><a href="#gentoo">Gentoo</a></li>
+<li>
+<a href="#binaries">Binaries</a>
+
+<ul>
+<li><a href="#stable">Stable</a></li>
+<li><a href="#dev">Dev</a></li>
+</ul>
+</li>
+<li><a href="#compilation">Compilation</a></li>
+</ul>
+</li>
+<li><a href="#usage">Usage</a></li>
+<li><a href="%screenshots">Screenshots</a></li>
+</ul>
+
+<h2>
+<a id="installation" class="anchor" href="#installation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Installation</h2>
+
+<h3>
+<a id="arch-linux" class="anchor" href="#arch-linux" aria-hidden="true"><span class="octicon octicon-link"></span></a>Arch Linux</h3>
+
+<p>See the <a href="https://aur.archlinux.org/packages/deadbeef-plugin-waveform-git/">AUR</a>.</p>
+
+<h3>
+<a id="gentoo" class="anchor" href="#gentoo" aria-hidden="true"><span class="octicon octicon-link"></span></a>Gentoo</h3>
+
+<p>See ebuilds <a href="https://github.com/megabaks/stuff/tree/master/media-plugins/deadbeef-waveform-seekbar">here</a>.</p>
+
+<h3>
+<a id="binaries" class="anchor" href="#binaries" aria-hidden="true"><span class="octicon octicon-link"></span></a>Binaries</h3>
+
+<p>Install them as follows:</p>
+
+<p>x86_64: <code>tar -xvf ddb_waveform_seekbar_x86_64.tar.gz -C ~/.local/lib/deadbeef</code></p>
+
+<p>i686: <code>tar -xvf ddb_waveform_seekbar_i686.tar.gz -C ~/.local/lib/deadbeef</code></p>
+
+<h4>
+<a id="stable" class="anchor" href="#stable" aria-hidden="true"><span class="octicon octicon-link"></span></a>Stable</h4>
+
+<p><a href="https://github.com/cboxdoerfer/ddb_waveform_seekbar/releases/download/v0.4/ddb_waveform_seekbar_x86_64.tar.gz">x86_64</a></p>
+
+<p><a href="https://github.com/cboxdoerfer/ddb_waveform_seekbar/releases/download/v0.4/ddb_waveform_seekbar_i686.tar.gz">i686</a></p>
+
+<h4>
+<a id="dev" class="anchor" href="#dev" aria-hidden="true"><span class="octicon octicon-link"></span></a>Dev</h4>
+
+<p><a href="https://drone.io/github.com/cboxdoerfer/ddb_waveform_seekbar/files/deadbeef-plugin-builder/ddb_waveform_seekbar_x86_64.tar.gz">x86_64</a></p>
+
+<p><a href="https://drone.io/github.com/cboxdoerfer/ddb_waveform_seekbar/files/deadbeef-plugin-builder/ddb_waveform_seekbar_i686.tar.gz">i686</a></p>
+
+<h3>
+<a id="compilation" class="anchor" href="#compilation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Compilation</h3>
+
+<p>You need DeaDBeeF (&gt;=0.6) and sqlite3 and their development files</p>
+
+<div class="highlight highlight-bash"><pre>make
+./userinstall.sh</pre></div>
+
+<h2>
+<a id="usage" class="anchor" href="#usage" aria-hidden="true"><span class="octicon octicon-link"></span></a>Usage</h2>
+
+<p>Add it to your Layout with Design Mode (Edit -&gt; Design Mode -&gt; right click in player UI). </p>
+
+<p>There are two settings dialogs:</p>
+
+<p>Right click on waveform and select Configure</p>
+
+<p>and</p>
+
+<p>Edit -&gt; Preferences -&gt; Plugins -&gt; Waveform Seekbar -&gt; Configure</p>
+
+<h2>
+<a id="screenshots" class="anchor" href="#screenshots" aria-hidden="true"><span class="octicon octicon-link"></span></a>Screenshots</h2>
+
+<h3>
+<a id="waveform" class="anchor" href="#waveform" aria-hidden="true"><span class="octicon octicon-link"></span></a>Waveform</h3>
+
+<p><img src="http://i.imgur.com/StjuEzc.png" alt=""></p>
+
+<p><img src="http://i.imgur.com/uI6YAzs.png" alt=""></p>
+
+<h3>
+<a id="settings" class="anchor" href="#settings" aria-hidden="true"><span class="octicon octicon-link"></span></a>Settings</h3>
+
+<p><img src="http://i.imgur.com/niEuKVT.png" alt="">
+<img src="http://i.imgur.com/ZCa2Wog.png" alt=""></p>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/cboxdoerfer/ddb_waveform_seekbar">Waveform Seekbar Plugin</a> is maintained by <a href="https://github.com/cboxdoerfer">cboxdoerfer</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
+
