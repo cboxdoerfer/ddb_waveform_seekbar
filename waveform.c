@@ -60,7 +60,7 @@ static ddb_gtkui_t *        gtkui_plugin = NULL;
 static char cache_path[PATH_MAX];
 static int cache_path_size;
 
-static enum PLAYBACK_STATUS { STOPPED = 0, PLAYING = 1, PAUSED = 2 };
+enum PLAYBACK_STATUS { STOPPED = 0, PLAYING = 1, PAUSED = 2 };
 static int playback_status = STOPPED;
 
 typedef struct wavedata_s
@@ -1410,7 +1410,9 @@ waveform_init (ddb_gtkui_widget_t *w)
     if (it) {
         playback_status = PLAYING;
         intptr_t tid = deadbeef->thread_start_low_priority (waveform_get_wavedata, w);
-        deadbeef->thread_detach (tid);
+        if (tid) {
+            deadbeef->thread_detach (tid);
+        }
         deadbeef->pl_item_unref (it);
     }
     wf->resizetimer = 0;
