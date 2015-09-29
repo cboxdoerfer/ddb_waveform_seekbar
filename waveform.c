@@ -1125,7 +1125,7 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
                             snprintf (text, sizeof (text), "%2d,%d", sc, ms);
                         }
                         const int text_x = rel * time + 2;
-                        const int text_y = a.height - 6;
+                        const int text_y = ex.height;
                         cairo_move_to (cr, text_x, text_y);
                         cairo_show_text (cr, text);
                     }
