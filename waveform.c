@@ -1446,6 +1446,7 @@ waveform_create (void)
     gtk_widget_set_size_request (w->base.widget, 300, 96);
     gtk_widget_set_size_request (w->ruler, -1, 12);
     gtk_widget_set_size_request (w->drawarea, -1, -1);
+    gtk_widget_add_events (w->base.widget, GDK_SCROLL_MASK);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->frame);
     gtk_container_add (GTK_CONTAINER (w->frame), vbox);
     gtk_container_add (GTK_CONTAINER (vbox), w->ruler);
