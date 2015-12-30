@@ -299,6 +299,10 @@ static gboolean
 waveform_redraw_cb (void *user_data)
 {
     waveform_t *w = user_data;
+    if (w->resizetimer) {
+        g_source_remove (w->resizetimer);
+        w->resizetimer = 0;
+    }
     waveform_draw (w, 0);
     waveform_draw (w, 1);
     gtk_widget_queue_draw (w->drawarea);
