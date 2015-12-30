@@ -1416,10 +1416,6 @@ waveform_init (ddb_gtkui_widget_t *w)
         deadbeef->pl_item_unref (it);
     }
     wf->resizetimer = 0;
-    if (wf->resizetimer) {
-        g_source_remove (wf->resizetimer);
-        wf->resizetimer = 0;
-    }
 
     on_config_changed (w);
 }
