@@ -876,9 +876,11 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
 
             if (data) {
                 free (data);
+                data = NULL;
             }
             if (buffer) {
                 free (buffer);
+                buffer = NULL;
             }
         }
     }
@@ -904,6 +906,7 @@ waveform_db_cache (gpointer user_data, DB_playItem_t *it, wavedata_t *wavedata)
     deadbeef->mutex_unlock (w->mutex);
     if (key) {
         free (key);
+        key = NULL;
     }
 }
 
@@ -937,6 +940,7 @@ waveform_delete (DB_playItem_t *it, const char *uri)
     int result = waveform_db_delete (key);
     if (key) {
         free (key);
+        key = NULL;
     }
     return result;
 }
@@ -951,6 +955,7 @@ waveform_is_cached (DB_playItem_t *it, const char *uri)
     int result = waveform_db_cached (key);
     if (key) {
         free (key);
+        key = NULL;
     }
     return result;
 }
@@ -968,6 +973,7 @@ waveform_get_from_cache (gpointer user_data, DB_playItem_t *it, const char *uri)
     deadbeef->mutex_unlock (w->mutex);
     if (key) {
         free (key);
+        key = NULL;
     }
 }
 
@@ -1026,6 +1032,7 @@ waveform_get_wavedata (gpointer user_data)
         }
         if (uri) {
             free (uri);
+            uri = NULL;
         }
     }
     if (it) {
