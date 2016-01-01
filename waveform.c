@@ -89,7 +89,6 @@ typedef struct
     float height;
     float width;
     intptr_t mutex;
-    intptr_t mutex_rendering;
     cairo_surface_t *surf;
     cairo_surface_t *surf_shaded;
 } waveform_t;
@@ -335,7 +334,6 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
         float seek_pos = 0;
         int cursor_width = CONFIG_CURSOR_WIDTH;
 
-        deadbeef->mutex_lock (w->mutex_rendering);
         if (height != w->height || width != w->width) {
             cairo_save (cr);
             cairo_translate (cr, 0, 0);
@@ -350,7 +348,6 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
             cairo_rectangle (cr, left, top, pos - cursor_width, height);
             cairo_fill (cr);
         }
-        deadbeef->mutex_unlock (w->mutex_rendering);
 
         draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width, top, cursor_width, height);
 
@@ -457,7 +454,6 @@ waveform_draw (void *user_data, int shaded)
         color_rms = render.c_rms;
     }
 
-    deadbeef->mutex_lock (w->mutex_rendering);
     if (!shaded || !w->surf || cairo_image_surface_get_width (w->surf) != width || cairo_image_surface_get_height (w->surf) != height) {
         if (w->surf) {
             cairo_surface_destroy (w->surf);
@@ -713,7 +709,6 @@ waveform_draw (void *user_data, int shaded)
     cairo_destroy (min_cr);
     cairo_destroy (rms_max_cr);
     cairo_destroy (rms_min_cr);
-    deadbeef->mutex_unlock (w->mutex_rendering);
     return;
 }
 
@@ -722,7 +717,6 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
 {
     waveform_t *w = user_data;
 
-    deadbeef->mutex_lock (w->mutex_rendering);
     if (height != w->height || width != w->width) {
         cairo_save (cr);
         cairo_translate (cr, x, y);
@@ -735,7 +729,6 @@ waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int heigh
         cairo_set_source_surface (cr, w->surf, x, y);
         cairo_paint (cr);
     }
-    deadbeef->mutex_unlock (w->mutex_rendering);
 }
 
 static gboolean
@@ -1371,14 +1364,6 @@ waveform_destroy (ddb_gtkui_widget_t *widget)
         deadbeef->mutex_free (w->mutex);
         w->mutex = 0;
     }
-    if (w->mutex_rendering) {
-        deadbeef->mutex_free (w->mutex_rendering);
-        w->mutex_rendering = 0;
-    }
-    //if (mutex) {
-    //    deadbeef->mutex_free (mutex);
-    //    mutex = 0;
-    //}
 }
 
 static void
@@ -1441,8 +1426,6 @@ waveform_create (void)
     w->popup = gtk_menu_new ();
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
-    w->mutex_rendering = deadbeef->mutex_create ();
-    //mutex = deadbeef->mutex_create ();
     gtk_widget_set_size_request (w->base.widget, 300, 96);
     gtk_widget_set_size_request (w->ruler, -1, 12);
     gtk_widget_set_size_request (w->drawarea, -1, -1);
