@@ -43,7 +43,7 @@ typedef struct cache_query_s
     struct cache_query_s *next;
 } cache_query_t;
 
-static uintptr_t mutex = NULL;
+static uintptr_t mutex = 0;
 static cache_query_t *queue;
 static cache_query_t *queue_tail;
 

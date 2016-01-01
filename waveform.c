@@ -560,8 +560,8 @@ waveform_draw (void *user_data, int shaded)
             cairo_move_to (rms_min_cr, left, center);
         }
 
-        cairo_pattern_t *pat;
-        cairo_pattern_t *pat1;
+        cairo_pattern_t *pat = NULL;
+        cairo_pattern_t *pat1 = NULL;
         if (CONFIG_SOUNDCLOUD_STYLE) {
             pat = cairo_pattern_create_linear (0, top, 0, center);
             cairo_pattern_add_color_stop_rgba (pat, 1, color_fg.r, color_fg.g, color_fg.b, 1);
@@ -696,8 +696,10 @@ waveform_draw (void *user_data, int shaded)
             cairo_fill (rms_min_cr);
         }
 
-        if (CONFIG_SOUNDCLOUD_STYLE) {
+        if (pat) {
             cairo_pattern_destroy (pat);
+        }
+        if (pat1) {
             cairo_pattern_destroy (pat1);
         }
     }
@@ -1055,8 +1057,6 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
     gtk_widget_get_allocation (w->ruler, &a);
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->ruler));
 
-    const int x = 0;
-    const int y = 0;
     const int width = a.width;
     const int height = a.height;
     draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, width, height);
@@ -1205,7 +1205,6 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
 static gboolean
 waveform_scroll_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
 {
-    waveform_t *w = user_data;
     GdkEventScroll *ev = (GdkEventScroll *)event;
     if (!CONFIG_SCROLL_ENABLED) {
         return TRUE;
@@ -1421,7 +1420,11 @@ waveform_create (void)
     w->base.message = waveform_message;
     w->drawarea = gtk_drawing_area_new ();
     w->ruler = gtk_drawing_area_new ();
+#if !GTK_CHECK_VERSION(3,0,0)
     GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
+#else
+    GtkWidget *vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+#endif
     w->frame = gtk_frame_new (NULL);
     w->popup = gtk_menu_new ();
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
@@ -1435,6 +1438,7 @@ waveform_create (void)
     gtk_container_add (GTK_CONTAINER (vbox), w->ruler);
     gtk_container_add (GTK_CONTAINER (vbox), w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->popup), w->popup_item);
+    gtk_box_set_child_packing (GTK_BOX (vbox), w->drawarea, TRUE, TRUE, 0, 0);
     gtk_box_set_child_packing (GTK_BOX (vbox), w->ruler, FALSE, TRUE, 0, 0);
     gtk_widget_show (w->drawarea);
     gtk_widget_show (vbox);
