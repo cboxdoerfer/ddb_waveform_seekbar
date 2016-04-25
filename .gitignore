@@ -2,6 +2,9 @@
 *.creator
 *.files
 *.user
+*.vim
+*.py
+*.pyc
 *.includes
 *.o
 *.bak
