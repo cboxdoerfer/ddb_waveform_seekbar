@@ -1063,10 +1063,17 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
     GtkAllocation a;
     gtk_widget_get_allocation (w->ruler, &a);
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->ruler));
+    if (cr == NULL) {
+        return;
+    }
 
     const int width = a.width;
     const int height = a.height;
     draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, width, height);
+    if (playback_status == STOPPED) {
+        goto out;
+    }
+
     cairo_set_antialias (cr, CAIRO_ANTIALIAS_NONE);
     cairo_set_line_width (cr, 1);
     cairo_set_source_rgba (cr, 0.2, 0.2, 0.2, 1);
@@ -1146,6 +1153,7 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
         }
         deadbeef->pl_item_unref (trk);
     }
+out:
     cairo_destroy (cr);
 }
 
@@ -1314,6 +1322,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         w->wave->channels = 0;
         deadbeef->mutex_unlock (w->mutex);
         g_idle_add (waveform_redraw_cb, w);
+        g_idle_add (ruler_redraw_cb, w);
         break;
     case DB_EV_CONFIGCHANGED:
         on_config_changed (w);
