@@ -142,15 +142,5 @@ load_config (void)
     CONFIG_FG_RMS_ALPHA = deadbeef->conf_get_int (CONFSTR_WF_FG_RMS_ALPHA,           65535);
 
     deadbeef->conf_unlock ();
-
-    render =
-    (RENDER) {
-        /*foreground*/  { CONFIG_FG_COLOR.red/65535.f,CONFIG_FG_COLOR.green/65535.f,
-                          CONFIG_FG_COLOR.blue/65535.f, CONFIG_FG_ALPHA/65535.f },
-        /*wave-rms*/    { CONFIG_FG_RMS_COLOR.red/65535.f,CONFIG_FG_RMS_COLOR.green/65535.f,
-                          CONFIG_FG_RMS_COLOR.blue/65535.f, CONFIG_FG_RMS_ALPHA/65535.f },
-        /*background*/  { CONFIG_BG_COLOR.red/65535.f,CONFIG_BG_COLOR.green/65535.f,
-                          CONFIG_BG_COLOR.blue/65535.f, CONFIG_BG_ALPHA/65535.f },
-    };
 }
 

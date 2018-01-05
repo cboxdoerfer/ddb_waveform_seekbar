@@ -24,29 +24,35 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef WAVEFORM_HEADER
-#define WAVEFORM_HEADER
+#pragma once
 
 //#define trace(...) { fprintf(stderr, __VA_ARGS__); }
 #define trace(fmt,...)
 
-extern DB_functions_t *     deadbeef;
+#include <deadbeef/deadbeef.h>
 
-enum STYLE { BARS = 1, SPIKES = 2 };
+extern DB_functions_t *deadbeef;
 
-typedef struct COLOUR
+typedef struct wavedata_s
+{
+    char *fname;
+    short *data;
+    size_t data_len;
+    int channels;
+} wavedata_t;
+
+typedef struct color_s
 {
     double r;
     double g;
     double b;
     double a;
-} COLOUR;
+} color_t;
 
-typedef struct
+typedef struct waveform_colors_s
 {
-    COLOUR c_fg, c_rms, c_bg;
-} RENDER;
+    color_t fg, rms, bg;
+} waveform_colors_t;
 
-extern RENDER render;
+enum STYLE { BARS = 1, SPIKES = 2 };
 
-#endif

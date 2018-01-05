@@ -24,8 +24,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef CONFIG_HEADER
-#define CONFIG_HEADER
+#pragma once 
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -37,7 +36,6 @@
 #include <gtk/gtk.h>
 
 #include <deadbeef/deadbeef.h>
-#include <deadbeef/gtkui_api.h>
 #include "cache.h"
 
 #define     CONFSTR_WF_LOG_ENABLED       "waveform.log_enabled"
@@ -106,4 +104,3 @@ save_config (void);
 void
 load_config (void);
 
-#endif

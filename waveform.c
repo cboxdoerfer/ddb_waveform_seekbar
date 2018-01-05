@@ -27,24 +27,25 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <assert.h>
 #include <math.h>
 #include <fcntl.h>
 #include <gtk/gtk.h>
-
 #include <deadbeef/deadbeef.h>
 #include <deadbeef/gtkui_api.h>
+
 #include "cache.h"
 #include "config.h"
 #include "config_dialog.h"
 #include "utils.h"
 #include "waveform.h"
+#include "render.h"
 
 #define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
 //#define M_PI (3.1415926535897932384626433832795029)
-#define LINE_WIDTH   (1.0)
 // min, max, rms
 #define VALUES_PER_SAMPLE (3)
 #define MAX_CHANNELS (6)
@@ -53,23 +54,15 @@
 
 
 /* Global variables */
-DB_functions_t *     deadbeef = NULL;
-static DB_misc_t            plugin;
-static ddb_gtkui_t *        gtkui_plugin = NULL;
+DB_functions_t *deadbeef = NULL;
+static DB_misc_t plugin;
+static ddb_gtkui_t *gtkui_plugin = NULL;
 
 static char cache_path[PATH_MAX];
 static int cache_path_size;
 
 enum PLAYBACK_STATUS { STOPPED = 0, PLAYING = 1, PAUSED = 2 };
 static int playback_status = STOPPED;
-
-typedef struct wavedata_s
-{
-    char *fname;
-    short *data;
-    size_t data_len;
-    int channels;
-} wavedata_t;
 
 typedef struct
 {
@@ -82,6 +75,10 @@ typedef struct
     guint drawtimer;
     guint resizetimer;
     wavedata_t *wave;
+
+    waveform_colors_t colors;
+    waveform_colors_t colors_shaded;
+
     size_t max_buffer_len;
     int seekbar_moving;
     float seekbar_move_x;
@@ -93,13 +90,25 @@ typedef struct
     cairo_surface_t *surf_shaded;
 } waveform_t;
 
-typedef struct DRECT
+typedef struct
+{
+    double x;
+    double y;
+} waveform_point_t;
+
+typedef struct
+{
+    double x;
+    double y;
+    double width;
+    double height;
+} waveform_rect_t;
+
+typedef struct
 {
     double x1, y1;
     double x2, y2;
-} DRECT;
-
-RENDER render;
+} waveform_line_t;
 
 static gboolean
 waveform_draw_cb (void *user_data);
@@ -113,11 +122,49 @@ waveform_draw (void *user_data, int shaded);
 static gboolean
 waveform_set_refresh_interval (void *user_data, int interval);
 
+static void
+waveform_colors_update (waveform_t *w)
+{
+    w->colors.fg = (color_t) {
+        CONFIG_FG_COLOR.red/65535.f,
+        CONFIG_FG_COLOR.green/65535.f,
+        CONFIG_FG_COLOR.blue/65535.f,
+        1.0
+    };
+    w->colors.bg = (color_t) {
+        CONFIG_BG_COLOR.red/65535.f,
+        CONFIG_BG_COLOR.green/65535.f,
+        CONFIG_BG_COLOR.blue/65535.f,
+        1.0
+    };
+    w->colors.rms = (color_t) {
+        CONFIG_FG_RMS_COLOR.red/65535.f,
+        CONFIG_FG_RMS_COLOR.green/65535.f,
+        CONFIG_FG_RMS_COLOR.blue/65535.f,
+        1.0
+    };
+
+    w->colors_shaded.fg = (color_t) {
+        CONFIG_PB_COLOR.red/65535.f,
+        CONFIG_PB_COLOR.green/65535.f,
+        CONFIG_PB_COLOR.blue/65535.f,
+        1.0
+    };
+    w->colors_shaded.bg = w->colors.bg;
+    w->colors_shaded.rms = (color_t) {
+        0.8 * CONFIG_PB_COLOR.red/65535.f,
+        0.8 * CONFIG_PB_COLOR.green/65535.f,
+        0.8 * CONFIG_PB_COLOR.blue/65535.f,
+        1.0
+    };
+}
+
 static int
 on_config_changed (void *widget)
 {
     waveform_t *w = (waveform_t *) widget;
     load_config ();
+    waveform_colors_update (w);
     // enable/disable border
     switch (CONFIG_BORDER_WIDTH) {
         case 0:
@@ -173,26 +220,6 @@ waveform_format_uri (DB_playItem_t *it, const char *uri)
     return key;
 }
 
-/* copied from ardour3 */
-static inline float
-_log_meter (float power, double lower_db, double upper_db, double non_linearity)
-{
-    return (power < lower_db ? 0.0 : pow ((power - lower_db) / (upper_db - lower_db), non_linearity));
-}
-
-static inline float
-alt_log_meter (float power)
-{
-    return _log_meter (power, -192.0, 0.0, 8.0);
-}
-
-static inline float
-coefficient_to_dB (float coeff)
-{
-    return 20.0f * log10 (coeff);
-}
-/* end of ardour copy */
-
 static void
 color_contrast (GdkColor * color)
 {
@@ -219,8 +246,12 @@ enum BORDERS
 
 static void
 clearlooks_rounded_rectangle (cairo_t * cr,
-                  double x, double y, double w, double h,
-                  double radius, uint8_t corners)
+                              double x,
+                              double y,
+                              double w,
+                              double h,
+                              double radius,
+                              uint8_t corners)
 {
     if (radius < 0.01 || (corners == CORNER_NONE)) {
         cairo_rectangle (cr, x, y, w, h);
@@ -252,22 +283,6 @@ clearlooks_rounded_rectangle (cairo_t * cr,
     else
         cairo_line_to (cr, x, y);
 
-}
-
-static inline void
-draw_cairo_line_path (cairo_t* cr, DRECT *pts, const COLOUR *c)
-{
-    cairo_set_source_rgba (cr, C_COLOUR (c));
-    cairo_line_to (cr, pts->x2, pts->y2);
-}
-
-static inline void
-draw_cairo_line (cairo_t* cr, DRECT *pts, const COLOUR *c)
-{
-    cairo_set_source_rgba (cr, C_COLOUR (c));
-    cairo_move_to (cr, pts->x1, pts->y1);
-    cairo_line_to (cr, pts->x2, pts->y2);
-    cairo_stroke (cr);
 }
 
 static inline void
@@ -307,17 +322,6 @@ waveform_redraw_cb (void *user_data)
     gtk_widget_queue_draw (w->drawarea);
     return FALSE;
 }
-
-//static gboolean
-//waveform_redraw_thread (void *user_data)
-//{
-//    w_waveform_t *w = user_data;
-//    w->resizetimer = 0;
-//    intptr_t tid = deadbeef->thread_start_low_priority (waveform_draw, w, 0);
-//    deadbeef->thread_detach (tid);
-//    gtk_widget_queue_draw (w->drawarea);
-//    return FALSE;
-//}
 
 static void
 waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
@@ -427,6 +431,19 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int w
     }
 }
 
+static cairo_surface_t *
+waveform_draw_surface_update (cairo_surface_t *surface, double width, double height)
+{
+    if (!surface || cairo_image_surface_get_width (surface) != width || cairo_image_surface_get_height (surface) != height) {
+        if (surface) {
+            cairo_surface_destroy (surface);
+            surface = NULL;
+        }
+        surface = cairo_image_surface_create (CAIRO_FORMAT_RGB24, width, height);
+    }
+    return surface;
+}
+
 static void
 waveform_draw (void *user_data, int shaded)
 {
@@ -434,283 +451,65 @@ waveform_draw (void *user_data, int shaded)
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
 
-    const double width = a.width;
-    const double height = a.height;
-    const double left = 0;
-    double waveform_height = height * 0.9;
-    double top = (height - waveform_height)/2;
+    const int width = a.width;
+    const int height = a.height;
+
     w->width = width;
     w->height = height;
 
-    COLOUR color_fg, color_rms;
-    if (CONFIG_SHADE_WAVEFORM == 1 && shaded == 1) {
-        color_fg = (COLOUR) { CONFIG_PB_COLOR.red/65535.f,CONFIG_PB_COLOR.green/65535.f,CONFIG_PB_COLOR.blue/65535.f, 1.0};
-        color_rms = (COLOUR) { (CONFIG_PB_COLOR.red - 0.2 * CONFIG_PB_COLOR.red)/65535.f,
-                               (CONFIG_PB_COLOR.green - 0.2 * CONFIG_PB_COLOR.green)/65535.f,
-                               (CONFIG_PB_COLOR.blue - 0.2 * CONFIG_PB_COLOR.blue)/65535.f, 1.0};
-    }
-    else  {
-        color_fg = render.c_fg;
-        color_rms = render.c_rms;
-    }
-
-    if (!shaded || !w->surf || cairo_image_surface_get_width (w->surf) != width || cairo_image_surface_get_height (w->surf) != height) {
-        if (w->surf) {
-            cairo_surface_destroy (w->surf);
-            w->surf = NULL;
-        }
-        w->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, width, height);
-    }
-    if (shaded || !w->surf_shaded || cairo_image_surface_get_width (w->surf_shaded) != width || cairo_image_surface_get_height (w->surf_shaded) != height) {
-        if (w->surf_shaded) {
-            cairo_surface_destroy (w->surf_shaded);
-            w->surf_shaded = NULL;
-        }
-        w->surf_shaded = cairo_image_surface_create (CAIRO_FORMAT_RGB24, width, height);
-    }
-
     cairo_surface_t *surface;
-    if (shaded == 0) {
+    if (!shaded) {
+        w->surf = waveform_draw_surface_update (w->surf, width, height);
         surface = w->surf;
     }
     else {
+        w->surf_shaded = waveform_draw_surface_update (w->surf_shaded, width, height);
         surface = w->surf_shaded;
     }
+
     cairo_surface_flush (surface);
     cairo_t *cr = cairo_create (surface);
-    cairo_t *max_cr = cairo_create (surface);
-    cairo_t *min_cr = cairo_create (surface);
-    cairo_t *rms_max_cr = cairo_create (surface);
-    cairo_t *rms_min_cr = cairo_create (surface);
+    assert (cr != NULL);
+
+    waveform_data_render_t *w_render_ctx = waveform_render_data_build (w->wave, width, CONFIG_MIX_TO_MONO);
 
     // Draw background
     draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, width, height);
+    if (w_render_ctx) {
 
-    cairo_set_line_width (cr, LINE_WIDTH);
-    cairo_set_line_width (max_cr, LINE_WIDTH);
-    cairo_set_line_width (min_cr, LINE_WIDTH);
-    cairo_set_line_width (rms_max_cr, LINE_WIDTH);
-    cairo_set_line_width (rms_min_cr, LINE_WIDTH);
+        const int channels = w_render_ctx->num_channels;
+        const double channel_height = height/channels;
+        const double waveform_height = 0.9 * channel_height;
+        const double x = 0.0;
+        double y = (channel_height - waveform_height)/2;
 
-    if (CONFIG_RENDER_METHOD == BARS) {
-        cairo_set_line_width (min_cr, 1);
-        cairo_set_antialias (min_cr, CAIRO_ANTIALIAS_NONE);
-        cairo_set_line_width (max_cr, 1);
-        cairo_set_antialias (max_cr, CAIRO_ANTIALIAS_NONE);
-        cairo_set_line_width (rms_min_cr, 1);
-        cairo_set_antialias (rms_min_cr, CAIRO_ANTIALIAS_NONE);
-        cairo_set_line_width (rms_max_cr, 1);
-        cairo_set_antialias (rms_max_cr, CAIRO_ANTIALIAS_NONE);
-        cairo_set_source_rgba (min_cr, color_fg.r, color_fg.g, color_fg.b, 1);
-        cairo_set_source_rgba (max_cr, color_fg.r, color_fg.g, color_fg.b, 1);
-        cairo_set_source_rgba (rms_min_cr, color_rms.r, color_rms.g, color_rms.b, 1);
-        cairo_set_source_rgba (rms_max_cr, color_rms.r, color_rms.g, color_rms.b, 1);
+        waveform_colors_t *colors = &w->colors;
+        if (CONFIG_SHADE_WAVEFORM && shaded) {
+            colors = &w->colors_shaded;
+        }
+
+        for (int ch = 0; ch < channels; ch++, y += channel_height) {
+            waveform_sample_t *samples = w_render_ctx->samples[ch];
+            switch (CONFIG_RENDER_METHOD) {
+                case SPIKES:
+                    waveform_draw_wave_default (samples, colors, cr, x, y, width, waveform_height);
+                    break;
+                case BARS:
+                    waveform_draw_wave_bars (samples, colors, cr, x, y, width, waveform_height);
+                    break;
+                default:
+                    waveform_draw_wave_default (samples, colors, cr, x, y, width, waveform_height);
+                    break;
+            }
+        }
+        if (!CONFIG_SHADE_WAVEFORM && shaded == 1) {
+            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, CONFIG_PB_ALPHA, 0, 0, width, height);
+        }
+
+        waveform_data_render_free (w_render_ctx);
     }
 
-    const float x_off = 0.5;
-
-    int channels = w->wave->channels;
-    int samples_size = VALUES_PER_SAMPLE * channels;
-    float samples_per_x;
-
-    if (channels != 0) {
-        samples_per_x = w->wave->data_len / (float)(width * samples_size);
-        waveform_height /= channels;
-        top /= channels;
-    }
-    else {
-        samples_per_x = w->wave->data_len / (float)(width * VALUES_PER_SAMPLE);
-    }
-    int max_samples_per_x = 1 + ceilf (samples_per_x);
-    int samples_per_buf = floorf (samples_per_x * (float)(samples_size));
-
-    if (CONFIG_MIX_TO_MONO) {
-        samples_size = VALUES_PER_SAMPLE;
-        channels = 1;
-        samples_per_x = w->wave->data_len / ((float)width * samples_size);
-        max_samples_per_x = 1 + ceilf (samples_per_x);
-        samples_per_buf = floorf (samples_per_x * (float)(samples_size));
-        waveform_height = height * 0.9;
-        top = (height - waveform_height)/2;
-    }
-
-    const int samples_per_buf_temp = samples_per_buf;
-    float min, max, rms;
-    float pmin = 0;
-    float pmax = 0;
-    float prms = 0;
-
-    for (int ch = 0; ch < channels; ch++, top += (height / channels)) {
-        if (w->wave->channels == 0) {
-            break;
-        }
-
-        double center;
-        if (CONFIG_SOUNDCLOUD_STYLE) {
-            center = floor (top + waveform_height * 0.7 + 0.5);
-        }
-        else {
-            center = floor (top + waveform_height/2 + 0.5);
-        }
-
-        if (CONFIG_RENDER_METHOD == SPIKES) {
-            cairo_move_to (max_cr, left, center);
-            cairo_move_to (min_cr, left, center);
-            cairo_move_to (rms_max_cr, left, center);
-            cairo_move_to (rms_min_cr, left, center);
-        }
-
-        cairo_pattern_t *pat = NULL;
-        cairo_pattern_t *pat1 = NULL;
-        if (CONFIG_SOUNDCLOUD_STYLE) {
-            pat = cairo_pattern_create_linear (0, top, 0, center);
-            cairo_pattern_add_color_stop_rgba (pat, 1, color_fg.r, color_fg.g, color_fg.b, 1);
-            cairo_pattern_add_color_stop_rgba (pat, 0, color_fg.r, color_fg.g, color_fg.b, 0.7);
-
-            pat1 = cairo_pattern_create_linear (0, center, 0, center + 0.3 * waveform_height);
-            cairo_pattern_add_color_stop_rgba (pat1, 0, color_fg.r - 0.1 * color_fg.r, color_fg.g - 0.1 * color_fg.g, color_fg.b - 0.1 * color_fg.b, 1);
-            cairo_pattern_add_color_stop_rgba (pat1, 0, color_fg.r, color_fg.g, color_fg.b, 0.7);
-            if (CONFIG_RENDER_METHOD == BARS) {
-                cairo_set_source (min_cr, pat1);
-                cairo_set_source (max_cr, pat);
-            }
-        }
-
-        int offset = ch * VALUES_PER_SAMPLE;
-        int f_offset = 0;
-        samples_per_buf = samples_per_buf_temp;
-        for (int x = 0; x < width; x++) {
-            if (offset + samples_per_buf > w->wave->data_len) {
-                break;
-            }
-
-            min = 0.0; max = 0.0; rms = 0.0;
-
-            int counter = 0;
-            const int offset_temp = offset;
-            for (; offset < offset_temp + samples_per_buf; offset += samples_size, counter++) {
-                max += (float)w->wave->data[offset]/1000;
-                min += (float)w->wave->data[offset+1]/1000;
-                rms += (float)w->wave->data[offset+2]/1000;
-            }
-
-            max /= counter;
-            min /= counter;
-            rms /= counter;
-
-            if (CONFIG_LOG_ENABLED) {
-                if (max > 0)
-                    max = alt_log_meter (coefficient_to_dB (max));
-                else
-                    max = -alt_log_meter (coefficient_to_dB (-max));
-
-                if (min > 0)
-                    min = alt_log_meter (coefficient_to_dB (min));
-                else
-                    min = -alt_log_meter (coefficient_to_dB (-min));
-
-                rms = alt_log_meter (coefficient_to_dB (rms));
-            }
-
-            double yoff;
-            if (CONFIG_SOUNDCLOUD_STYLE) {
-                yoff = 0.7 * waveform_height;
-                min = 0.3 * waveform_height * min;
-                max = 0.7 * waveform_height * max;
-                rms = waveform_height * rms;
-            }
-            else {
-                yoff = 0.5 * waveform_height;
-                min = min * yoff;
-                max = max * yoff;
-                rms = rms * yoff;
-            }
-
-            /* Draw Foreground - line */
-            if (CONFIG_RENDER_METHOD == SPIKES) {
-                DRECT pts0 = { left + x - x_off, top + yoff - pmin, left + x + x_off, top + yoff - min };
-                DRECT pts1 = { left + x - x_off, top + yoff - pmax, left + x + x_off, top + yoff - max };
-                if (CONFIG_FILL_WAVEFORM == 1) {
-                    draw_cairo_line_path (min_cr, &pts0, &color_fg);
-                    draw_cairo_line_path (max_cr, &pts1, &color_fg);
-                }
-                else {
-                    draw_cairo_line (min_cr, &pts0, &color_fg);
-                    draw_cairo_line (max_cr, &pts1, &color_fg);
-                }
-            }
-            else if (CONFIG_RENDER_METHOD == BARS) {
-                DRECT pts0 = { left + x, top + yoff, left + x, top + yoff - min };
-                draw_cairo_line (min_cr, &pts0, &color_fg);
-                DRECT pts1 = { left + x, top + yoff, left + x, top + yoff - max };
-                draw_cairo_line (max_cr, &pts1, &color_fg);
-            }
-
-            if (!CONFIG_SOUNDCLOUD_STYLE) {
-                if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == SPIKES) {
-                    DRECT pts0 = { left + x - x_off, top + yoff - prms, left + x + x_off, top + yoff - rms };
-                    DRECT pts1 = { left + x - x_off, top + yoff + prms, left + x + x_off, top + yoff + rms };
-                    if (CONFIG_FILL_WAVEFORM == 1) {
-                        draw_cairo_line_path (rms_min_cr, &pts0, &color_rms);
-                        draw_cairo_line_path (rms_max_cr, &pts1, &color_rms);
-                    }
-                    else {
-                        draw_cairo_line (rms_min_cr, &pts0, &color_rms);
-                        draw_cairo_line (rms_max_cr, &pts1, &color_rms);
-                    }
-                }
-                else if (CONFIG_DISPLAY_RMS && CONFIG_RENDER_METHOD == BARS) {
-                    DRECT pts0 = { left + x, top + yoff, left + x, top + yoff - rms };
-                    draw_cairo_line (rms_min_cr, &pts0, &color_rms);
-                    DRECT pts1 = { left + x, top + yoff, left + x, top + yoff + rms };
-                    draw_cairo_line (rms_max_cr, &pts1, &color_rms);
-                }
-            }
-
-            pmin = min;
-            pmax = max;
-            prms = rms;
-
-            f_offset += samples_per_buf;
-            samples_per_buf = floorf ((x + 1) * samples_per_x * samples_size) - f_offset;
-            samples_per_buf = samples_per_buf > (max_samples_per_x * samples_size) ? (max_samples_per_x * samples_size) : samples_per_buf;
-            samples_per_buf = samples_per_buf + ((samples_size) - (samples_per_buf % samples_size));
-        }
-        if (CONFIG_RENDER_METHOD == SPIKES && CONFIG_FILL_WAVEFORM) {
-            double right = floor (left + width + 0.5);
-            cairo_line_to (max_cr, right, center);
-            cairo_line_to (min_cr, right, center);
-            cairo_line_to (rms_min_cr, right, center);
-            cairo_line_to (rms_max_cr, right, center);
-            cairo_close_path (max_cr);
-            cairo_close_path (min_cr);
-            cairo_close_path (rms_max_cr);
-            cairo_close_path (rms_min_cr);
-            if (CONFIG_SOUNDCLOUD_STYLE) {
-                cairo_set_source (min_cr, pat1);
-                cairo_set_source (max_cr, pat);
-            }
-            cairo_fill (max_cr);
-            cairo_fill (min_cr);
-            cairo_fill (rms_max_cr);
-            cairo_fill (rms_min_cr);
-        }
-
-        if (pat) {
-            cairo_pattern_destroy (pat);
-        }
-        if (pat1) {
-            cairo_pattern_destroy (pat1);
-        }
-    }
-    if (!CONFIG_SHADE_WAVEFORM && shaded == 1) {
-        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, CONFIG_PB_ALPHA, 0, 0, width, height);
-    }
     cairo_destroy (cr);
-    cairo_destroy (max_cr);
-    cairo_destroy (min_cr);
-    cairo_destroy (rms_max_cr);
-    cairo_destroy (rms_min_cr);
     return;
 }
 
@@ -857,7 +656,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                         if (playing == it) {
                             deadbeef->mutex_lock (w->mutex);
                             w->wave->channels = fileinfo->fmt.channels;
-                            w->wave->data_len = w->wave->channels * 3 * CONFIG_NUM_SAMPLES;
+                            w->wave->data_len = w->wave->channels * VALUES_PER_SAMPLE * CONFIG_NUM_SAMPLES;
                             memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
                             memcpy (w->wave->data, wavedata->data, counter * sizeof (short));
                             deadbeef->mutex_unlock (w->mutex);
@@ -1191,7 +990,7 @@ waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data
         g_source_remove (w->resizetimer);
         w->resizetimer = 0;
     }
-    w->resizetimer = g_timeout_add (500, waveform_redraw_cb, w);
+    w->resizetimer = g_timeout_add (100, waveform_redraw_cb, w);
     return FALSE;
 }
 
@@ -1388,6 +1187,8 @@ waveform_init (ddb_gtkui_widget_t *w)
     GtkAllocation a;
     gtk_widget_get_allocation (wf->drawarea, &a);
     load_config ();
+    waveform_colors_update (wf);
+
     wf->max_buffer_len = MAX_SAMPLES * VALUES_PER_SAMPLE * MAX_CHANNELS * sizeof (short);
     deadbeef->mutex_lock (wf->mutex);
     wf->wave = malloc (sizeof (wavedata_t));
