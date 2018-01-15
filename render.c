@@ -146,7 +146,7 @@ waveform_render_data_build (wavedata_t *wave_data, int width, bool downmix_mono)
         return NULL;
     }
 
-    const int channels_render = CONFIG_MIX_TO_MONO ? 1 : channels_data; 
+    const int channels_render = CONFIG_MIX_TO_MONO ? 1 : channels_data;
 
     const int sample_size = VALUES_PER_SAMPLE * channels_data;
 
@@ -193,7 +193,7 @@ waveform_render_data_build (wavedata_t *wave_data, int width, bool downmix_mono)
     return w_render_ctx;
 }
 
-enum SAMPLE_TYPE { 
+enum SAMPLE_TYPE {
     SAMPLE_MAX,
     SAMPLE_MIN,
     SAMPLE_RMS_MAX,
@@ -407,7 +407,7 @@ waveform_render_wave_bar_values (cairo_t *cr_ctx,
                                                           y + height);
     }
 
-    waveform_render_samples_loop (cr_ctx, 
+    waveform_render_samples_loop (cr_ctx,
                                   samples,
                                   &render_func,
                                   y_scale_1,
@@ -569,7 +569,7 @@ waveform_render_wave_default_values (cairo_t *cr_ctx,
     }
 
     cairo_move_to (cr_ctx, x, y_center);
-    waveform_render_samples_loop (cr_ctx, 
+    waveform_render_samples_loop (cr_ctx,
                                   samples,
                                   &render_func_1,
                                   y_scale,
@@ -580,7 +580,7 @@ waveform_render_wave_default_values (cairo_t *cr_ctx,
 
     y_scale = height - y_scale;
 
-    waveform_render_samples_loop_reverse (cr_ctx, 
+    waveform_render_samples_loop_reverse (cr_ctx,
                                           samples,
                                           &render_func_2,
                                           y_scale,
