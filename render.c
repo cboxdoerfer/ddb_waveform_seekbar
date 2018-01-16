@@ -42,14 +42,6 @@ typedef struct
 
 typedef struct
 {
-    double x;
-    double y;
-    double width;
-    double height;
-} waveform_rect_t;
-
-typedef struct
-{
     double x1, y1;
     double x2, y2;
 } waveform_line_t;
@@ -350,12 +342,12 @@ waveform_render_bars_sample_rms (cairo_t *cr_ctx,
 static cairo_pattern_t *
 waveform_render_soundcloud_pattern_get (cairo_t *cr_ctx,
                                         waveform_colors_t *color,
-                                        double x1,
-                                        double y1,
-                                        double x2,
-                                        double y2)
+                                        waveform_line_t *vec_pat)
 {
-    cairo_pattern_t *lin_pat = cairo_pattern_create_linear (x1, y1, x2, y2);
+    cairo_pattern_t *lin_pat = cairo_pattern_create_linear (vec_pat->x1,
+                                                            vec_pat->y1,
+                                                            vec_pat->x2,
+                                                            vec_pat->y2);
     cairo_pattern_add_color_stop_rgba (lin_pat, 0.0, color->fg.r, color->fg.g, color->fg.b, 0.7);
     cairo_pattern_add_color_stop_rgba (lin_pat, 0.7, color->fg.r, color->fg.g, color->fg.b, 1.0);
     cairo_pattern_add_color_stop_rgba (lin_pat, 0.7, color->fg.r, color->fg.g, color->fg.b, 0.5);
@@ -370,11 +362,13 @@ waveform_render_wave_bar_values (cairo_t *cr_ctx,
                                  waveform_sample_t *samples,
                                  waveform_colors_t *color,
                                  int type,
-                                 double x,
-                                 double y,
-                                 double width,
-                                 double height)
+                                 waveform_rect_t *rect)
 {
+    double x = rect->x;
+    double y = rect->y;
+    double width = rect->width;
+    double height = rect->height;
+
     double y_scale_1 = 0.5 * height;
     if (CONFIG_SOUNDCLOUD_STYLE) {
         y_scale_1 = 0.7 * height;
@@ -399,12 +393,15 @@ waveform_render_wave_bar_values (cairo_t *cr_ctx,
 
     cairo_pattern_t *lin_pat = NULL;
     if (CONFIG_SOUNDCLOUD_STYLE) {
+        waveform_line_t vec_pat = {
+            .x1 = x,
+            .y1 = y,
+            .x2 = x,
+            .y2 = y + height,
+        };
         lin_pat = waveform_render_soundcloud_pattern_get (cr_ctx,
                                                           color,
-                                                          x,
-                                                          y,
-                                                          x,
-                                                          y + height);
+                                                          &vec_pat);
     }
 
     waveform_render_samples_loop (cr_ctx,
@@ -427,10 +424,7 @@ void
 waveform_draw_wave_bars (waveform_sample_t *samples,
                          waveform_colors_t *colors,
                          cairo_t *cr_ctx,
-                         double x,
-                         double y,
-                         double width,
-                         double height)
+                         waveform_rect_t *rect)
 {
     cairo_set_line_width (cr_ctx, LINE_WIDTH_BARS);
     cairo_set_antialias (cr_ctx, CAIRO_ANTIALIAS_NONE);
@@ -441,10 +435,7 @@ waveform_draw_wave_bars (waveform_sample_t *samples,
                                      samples,
                                      colors,
                                      SAMPLE_MAX,
-                                     x,
-                                     y,
-                                     width,
-                                     height);
+                                     rect);
 
     if (CONFIG_DISPLAY_RMS) {
         // draw rms values
@@ -453,10 +444,7 @@ waveform_draw_wave_bars (waveform_sample_t *samples,
                                          samples,
                                          colors,
                                          SAMPLE_RMS_MAX,
-                                         x,
-                                         y,
-                                         width,
-                                         height);
+                                         rect);
     }
 
     return;
@@ -536,11 +524,12 @@ waveform_render_wave_default_values (cairo_t *cr_ctx,
                                      waveform_sample_t *samples,
                                      waveform_colors_t *color,
                                      int type,
-                                     double x,
-                                     double y,
-                                     double width,
-                                     double height)
+                                     waveform_rect_t *rect)
 {
+    double x = rect->x;
+    double y = rect->y;
+    double width = rect->width;
+    double height = rect->height;
 
     waveform_render_sample_func render_func_1;
     waveform_render_sample_func render_func_2;
@@ -565,7 +554,13 @@ waveform_render_wave_default_values (cairo_t *cr_ctx,
 
     cairo_pattern_t *lin_pat = NULL;
     if (CONFIG_SOUNDCLOUD_STYLE) {
-        lin_pat = waveform_render_soundcloud_pattern_get (cr_ctx, color, x, y, x, y + height);
+        waveform_line_t vec_pat = {
+            .x1 = x,
+            .y1 = y,
+            .x2 = x,
+            .y2 = y + height,
+        };
+        lin_pat = waveform_render_soundcloud_pattern_get (cr_ctx, color, &vec_pat);
     }
 
     cairo_move_to (cr_ctx, x, y_center);
@@ -607,10 +602,7 @@ void
 waveform_draw_wave_default (waveform_sample_t *samples,
                             waveform_colors_t *colors,
                             cairo_t *cr_ctx,
-                            double x,
-                            double y,
-                            double width,
-                            double height)
+                            waveform_rect_t *rect)
 {
     cairo_set_line_width (cr_ctx, LINE_WIDTH_DEFAULT);
     cairo_set_antialias (cr_ctx, CAIRO_ANTIALIAS_BEST);
@@ -620,10 +612,7 @@ waveform_draw_wave_default (waveform_sample_t *samples,
                                          samples,
                                          colors,
                                          SAMPLE_MIN_MAX,
-                                         x,
-                                         y,
-                                         width,
-                                         height);
+                                         rect);
 
     if (CONFIG_DISPLAY_RMS) {
         cairo_set_source_rgba (cr_ctx, W_COLOR (&colors->rms));
@@ -632,10 +621,7 @@ waveform_draw_wave_default (waveform_sample_t *samples,
                                              samples,
                                              colors,
                                              SAMPLE_RMS_MIN_MAX,
-                                             x,
-                                             y,
-                                             width,
-                                             height);
+                                             rect);
     }
 
     return;

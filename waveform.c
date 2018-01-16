@@ -98,14 +98,6 @@ typedef struct
 
 typedef struct
 {
-    double x;
-    double y;
-    double width;
-    double height;
-} waveform_rect_t;
-
-typedef struct
-{
     double x1, y1;
     double x2, y2;
 } waveform_line_t;
@@ -490,15 +482,21 @@ waveform_draw (void *user_data, int shaded)
 
         for (int ch = 0; ch < channels; ch++, y += channel_height) {
             waveform_sample_t *samples = w_render_ctx->samples[ch];
+            waveform_rect_t rect = {
+                .x = x,
+                .y = y,
+                .width = width,
+                .height = waveform_height,
+            };
             switch (CONFIG_RENDER_METHOD) {
                 case SPIKES:
-                    waveform_draw_wave_default (samples, colors, cr, x, y, width, waveform_height);
+                    waveform_draw_wave_default (samples, colors, cr, &rect);
                     break;
                 case BARS:
-                    waveform_draw_wave_bars (samples, colors, cr, x, y, width, waveform_height);
+                    waveform_draw_wave_bars (samples, colors, cr, &rect);
                     break;
                 default:
-                    waveform_draw_wave_default (samples, colors, cr, x, y, width, waveform_height);
+                    waveform_draw_wave_default (samples, colors, cr, &rect);
                     break;
             }
         }

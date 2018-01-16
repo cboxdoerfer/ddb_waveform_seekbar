@@ -29,6 +29,14 @@ typedef struct {
     float rms;
 } waveform_sample_t;
 
+typedef struct
+{
+    double x;
+    double y;
+    double width;
+    double height;
+} waveform_rect_t;
+
 typedef struct {
     waveform_sample_t **samples;
     int num_channels;
@@ -46,16 +54,10 @@ void
 waveform_draw_wave_default (waveform_sample_t *samples,
                             waveform_colors_t *colors,
                             cairo_t *cr_ctx,
-                            double x,
-                            double y,
-                            double width,
-                            double height);
+                            waveform_rect_t *rect);
 
 void
 waveform_draw_wave_bars (waveform_sample_t *samples,
                          waveform_colors_t *colors,
                          cairo_t *cr_ctx,
-                         double x,
-                         double y,
-                         double width,
-                         double height);
+                         waveform_rect_t *rect);
