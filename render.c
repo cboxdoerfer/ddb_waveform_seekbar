@@ -153,13 +153,13 @@ waveform_render_data_build (wavedata_t *wave_data, int width, bool downmix_mono)
 
         for (int x = 0; x < width; x++) {
             const int d_end = MAX (floorf ((x+1) * num_samples_per_x),1);
+            waveform_sample_t *sample = &samples[x];
 
             int counter = 0;
-
             if (CONFIG_MIX_TO_MONO) {
                 for (int ch_data = 0; ch_data < channels_data; ch_data++) {
                     counter += waveform_data_render_build_sample (wave_data,
-                                                                 &samples[x],
+                                                                 sample,
                                                                  sample_size,
                                                                  ch_data,
                                                                  d_start,
@@ -168,15 +168,15 @@ waveform_render_data_build (wavedata_t *wave_data, int width, bool downmix_mono)
             }
             else {
                 counter += waveform_data_render_build_sample (wave_data,
-                                                             &samples[x],
+                                                             sample,
                                                              sample_size,
                                                              ch,
                                                              d_start,
                                                              d_end);
             }
 
-            samples[x].rms /= counter;
-            samples[x].rms = sqrt (samples[x].rms);
+            sample->rms /= counter;
+            sample->rms = sqrt (sample->rms);
 
             d_start = d_end;
         }
