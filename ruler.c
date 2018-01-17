@@ -173,7 +173,12 @@ ruler_time_resolution_build (ruler_time_resolution_t *res, float duration)
 }
 
 static bool
-ruler_time_fits_width (cairo_t *cr, char *dest, size_t dest_size, ruler_time_resolution_t *res, float duration, double width)
+ruler_time_fits_width (cairo_t *cr,
+                       char *dest,
+                       size_t dest_size,
+                       ruler_time_resolution_t *res,
+                       float duration,
+                       double width)
 {
     if (res->n > RULER_MAX_LABELS) {
         return false;
@@ -214,7 +219,10 @@ ruler_time_fits_width (cairo_t *cr, char *dest, size_t dest_size, ruler_time_res
 //   since displaying all values up to 2min uses more space than available
 //
 static ruler_time_resolution_t *
-ruler_time_find_resolution (cairo_t *cr, ruler_time_resolution_t *resolutions, float duration, double width)
+ruler_time_find_resolution (cairo_t *cr,
+                            ruler_time_resolution_t *resolutions,
+                            float duration,
+                            double width)
 {
     ruler_time_resolution_t *res = NULL;
 
@@ -228,7 +236,12 @@ ruler_time_find_resolution (cairo_t *cr, ruler_time_resolution_t *resolutions, f
         }
         char time_text[100] = "";
         // determine how many labels fit in to the width for the given resolution
-        bool fits = ruler_time_fits_width (cr, time_text, sizeof (time_text)/sizeof (char), res_tmp, duration, width);
+        bool fits = ruler_time_fits_width (cr,
+                                           time_text,
+                                           sizeof (time_text)/sizeof (char),
+                                           res_tmp,
+                                           duration,
+                                           width);
         // only consider resolutions which are able to display one or more labels
         // and prefer higher to lower resolutions
         if (fits && res_tmp->n > n_max) {
@@ -240,7 +253,10 @@ ruler_time_find_resolution (cairo_t *cr, ruler_time_resolution_t *resolutions, f
 }
 
 void
-waveform_render_ruler (cairo_t *cr_ctx, waveform_colors_t *color, float duration, waveform_rect_t *rect)
+waveform_render_ruler (cairo_t *cr_ctx,
+                       waveform_colors_t *color,
+                       float duration,
+                       waveform_rect_t *rect)
 {
     // Draw background
     cairo_set_source_rgba (cr_ctx, color->bg.r, color->bg.g, color->bg.b, 1.0);
@@ -271,7 +287,10 @@ waveform_render_ruler (cairo_t *cr_ctx, waveform_colors_t *color, float duration
     ruler_time_resolution_build (resolutions, duration);
 
 
-    ruler_time_resolution_t *res = ruler_time_find_resolution (cr_ctx, resolutions, duration, rect->width);
+    ruler_time_resolution_t *res = ruler_time_find_resolution (cr_ctx,
+                                                               resolutions,
+                                                               duration,
+                                                               rect->width);
     if (!res) {
         return;
     }
