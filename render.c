@@ -175,8 +175,8 @@ waveform_render_data_build (wavedata_t *wave_data, int width, bool downmix_mono)
                                                              d_end);
             }
 
-            samples->rms /= counter;
-            samples->rms = sqrt (samples->rms);
+            samples[x].rms /= counter;
+            samples[x].rms = sqrt (samples[x].rms);
 
             d_start = d_end;
         }
