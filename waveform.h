@@ -49,6 +49,14 @@ typedef struct color_s
     double a;
 } color_t;
 
+typedef struct
+{
+    double x;
+    double y;
+    double width;
+    double height;
+} waveform_rect_t;
+
 typedef struct waveform_colors_s
 {
     color_t fg, rms, bg;

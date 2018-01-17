@@ -42,6 +42,7 @@
 #include "utils.h"
 #include "waveform.h"
 #include "render.h"
+#include "ruler.h"
 
 #define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
@@ -860,97 +861,27 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
     GtkAllocation a;
     gtk_widget_get_allocation (w->ruler, &a);
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->ruler));
-    if (cr == NULL) {
+    if (!cr) {
         return;
     }
 
-    const int width = a.width;
-    const int height = a.height;
-    draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, width, height);
-    if (playback_status == STOPPED) {
-        goto out;
-    }
+    waveform_rect_t rect = {
+        .x = 0.0,
+        .y = 0.0,
+        .width = a.width,
+        .height = a.height,
+    };
 
-    cairo_set_antialias (cr, CAIRO_ANTIALIAS_NONE);
-    cairo_set_line_width (cr, 1);
-    cairo_set_source_rgba (cr, 0.2, 0.2, 0.2, 1);
-    cairo_move_to (cr, 0, a.height);
-    cairo_line_to (cr, a.width, a.height);
-    cairo_stroke (cr);
+    float duration = 0.f;
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
-        const float duration = deadbeef->pl_get_item_duration (trk);
-        const float rel = (float)a.width/duration;
-        const float values[] = {3600.f, 1800.f, 600.f, 60.f, 30.f, 10.f, 5.f, 1.f, 0.5f, 0.1f};
-
-        char text[100];
-        snprintf (text, sizeof (text), "%f", duration);
-        cairo_set_font_size (cr, 8);
-        cairo_text_extents_t ex;
-        cairo_text_extents (cr, text, &ex);
-
-        int bar_h = 12;
-
-        int steps = floorf (duration/values[0]);
-        int pos = 0;
-        while (a.width/MAX (1, steps) > 3) {
-            if (steps > 0) {
-                float prev_time = 0.f;
-                for (int i = 1; i <= steps; i++) {
-                    const float time = i*values[pos];
-                    int stop = 0;
-                    for (int j = 0; j < pos; j++) {
-                        if (fmod (time, values[j]) == 0.f) {
-                            stop = 1;
-                        }
-                    }
-                    if (stop) {
-                        continue;
-                    }
-                    cairo_move_to (cr, rel * time, a.height);
-                    cairo_line_to (cr, rel * time, a.height - bar_h);
-                    cairo_stroke (cr);
-
-                    if (prev_time == time) {
-                        continue;
-                    }
-                    prev_time = time;
-
-                    if (duration > 2.f && a.width/steps > 50) { 
-                        const int hr = time/3600;
-                        const int mn = (time-hr*3600)/60;
-                        const int sc = time-hr*3600-mn*60;
-                        const int ms = (time-hr*3600-mn*60-sc)*10;
-
-                        if (hr > 0) {
-                            snprintf (text, sizeof (text), "%d:%02d:%02d", hr, mn, sc);
-                        }
-                        else if (duration > 20) {
-                            snprintf (text, sizeof (text), "%d:%02d", mn, sc);
-                        }
-                        else {
-                            snprintf (text, sizeof (text), "%2d,%d", sc, ms);
-                        }
-                        const int text_x = rel * time + 2;
-                        const int text_y = ex.height;
-                        cairo_move_to (cr, text_x, text_y);
-                        cairo_show_text (cr, text);
-                    }
-                }
-                bar_h -= 3;
-            }
-            pos++;
-            if (pos < sizeof (values)/sizeof (float)) {
-                steps = floorf (duration/values[pos]);
-            }
-            else {
-                break;
-            }
-        }
+        duration = deadbeef->pl_get_item_duration (trk);
         deadbeef->pl_item_unref (trk);
     }
-out:
+
+    waveform_render_ruler (cr, &w->colors, duration, &rect);
+
     cairo_destroy (cr);
 }
 

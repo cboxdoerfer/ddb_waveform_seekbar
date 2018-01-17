@@ -21,35 +21,10 @@
 #pragma once
 
 #include <stdbool.h>
+#include <cairo.h>
+
 #include "waveform.h"
 
-typedef struct {
-    float max;
-    float min;
-    float rms;
-} waveform_sample_t;
-
-typedef struct {
-    waveform_sample_t **samples;
-    int num_channels;
-    // samples per channel
-    int num_samples;
-} waveform_data_render_t;
-
 void
-waveform_data_render_free (waveform_data_render_t *w_render_ctx);
+waveform_render_ruler (cairo_t *cr_ctx, waveform_colors_t *color, float duration, waveform_rect_t *rect);
 
-waveform_data_render_t *
-waveform_render_data_build (wavedata_t *wave_data, int width, bool downmix_mono);
-
-void
-waveform_draw_wave_default (waveform_sample_t *samples,
-                            waveform_colors_t *colors,
-                            cairo_t *cr_ctx,
-                            waveform_rect_t *rect);
-
-void
-waveform_draw_wave_bars (waveform_sample_t *samples,
-                         waveform_colors_t *colors,
-                         cairo_t *cr_ctx,
-                         waveform_rect_t *rect);
