@@ -139,9 +139,7 @@ waveform_render_data_build (wavedata_t *wave_data, int width, bool downmix_mono)
     }
 
     const int channels_render = CONFIG_MIX_TO_MONO ? 1 : channels_data;
-
     const int sample_size = VALUES_PER_SAMPLE * channels_data;
-
     const float num_samples_per_x = wave_data->data_len / (float)(width * sample_size);
 
     waveform_data_render_t *w_render_ctx = waveform_data_render_new (channels_render, width);
