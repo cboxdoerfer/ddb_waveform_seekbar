@@ -557,7 +557,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
     wavedata->data_len = 0;
     wavedata->channels = 0;
 
-    if (dec) {
+    if (dec && dec->open) {
         fileinfo = dec->open (0);
         if (fileinfo && dec->init (fileinfo, DB_PLAYITEM (it)) != 0) {
             deadbeef->pl_lock ();
