@@ -855,7 +855,10 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
     waveform_t *w = user_data;
     GtkAllocation a;
     gtk_widget_get_allocation (w->ruler, &a);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->ruler));
+#pragma GCC diagnostic pop
     if (!cr) {
         return;
     }
@@ -892,7 +895,10 @@ waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
     }
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
+#pragma GCC diagnostic pop
 
     const int x = 0;
     const int y = 0;
@@ -990,7 +996,10 @@ waveform_button_release_event (GtkWidget *widget, GdkEventButton *event, gpointe
 {
     waveform_t *w = user_data;
     if (event->button == 3) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         gtk_menu_popup (GTK_MENU (w->popup), NULL, NULL, NULL, w->drawarea, 0, gtk_get_current_event_time ());
+#pragma GCC diagnostic pop
         return TRUE;
     }
     if (event->button == 2) {
