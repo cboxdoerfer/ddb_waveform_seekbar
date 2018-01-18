@@ -275,7 +275,7 @@ ruler_time_find_resolution (cairo_t *cr,
     return res;
 }
 
-void
+static void
 ruler_sub_marker_draw (cairo_t *cr_ctx,
                        ruler_time_resolution_t *res,
                        double x,
