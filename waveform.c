@@ -774,63 +774,68 @@ static void
 waveform_get_wavedata (gpointer user_data)
 {
     waveform_t *w = user_data;
-    deadbeef->background_job_increment ();
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
-    if (it) {
-        char *uri = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
-        if (uri && waveform_valid_track (it, uri)) {
-            if (CONFIG_CACHE_ENABLED && waveform_is_cached (it, uri)) {
-                waveform_get_from_cache (w, it, uri);
-                g_idle_add (waveform_redraw_cb, w);
-            }
-            else if (queue_add (uri)) {
-                wavedata_t *wavedata = malloc (sizeof (wavedata_t));
-                wavedata->data = malloc (sizeof (short) * w->max_buffer_len);
-                memset (wavedata->data, 0, sizeof (short) * w->max_buffer_len);
-                wavedata->fname = NULL;
+    if (!it) {
+        return;
+    }
 
-                waveform_generate_wavedata (w, it, uri, wavedata);
-                if (CONFIG_CACHE_ENABLED) {
-                    waveform_db_cache (w, it, wavedata);
-                }
-                queue_pop (uri);
+    char *uri = strdup (deadbeef->pl_find_meta_raw (it, ":URI"));
+    if (!uri) {
+        return;
+    }
+    if (!waveform_valid_track (it, uri)) {
+        return;
+    }
 
-                DB_playItem_t *playing = deadbeef->streamer_get_playing_track ();
-                if (playing && it && it == playing) {
-                    deadbeef->mutex_lock (w->mutex);
-                    memcpy (w->wave->data, wavedata->data, wavedata->data_len * sizeof (short));
-                    w->wave->data_len = wavedata->data_len;
-                    w->wave->channels = wavedata->channels;
-                    deadbeef->mutex_unlock (w->mutex);
-                    g_idle_add (waveform_redraw_cb, w);
+    deadbeef->background_job_increment ();
+    if (CONFIG_CACHE_ENABLED && waveform_is_cached (it, uri)) {
+        waveform_get_from_cache (w, it, uri);
+        g_idle_add (waveform_redraw_cb, w);
+    }
+    else if (queue_add (uri)) {
+        wavedata_t *wavedata = malloc (sizeof (wavedata_t));
+        wavedata->data = malloc (sizeof (short) * w->max_buffer_len);
+        memset (wavedata->data, 0, sizeof (short) * w->max_buffer_len);
+        wavedata->fname = NULL;
 
-                }
-                if (playing) {
-                    deadbeef->pl_item_unref (playing);
-                }
-
-                if (wavedata->data) {
-                    free (wavedata->data);
-                    wavedata->data = NULL;
-                }
-                if (wavedata->fname) {
-                    free (wavedata->fname);
-                    wavedata->fname = NULL;
-                }
-                if (wavedata) {
-                    free (wavedata);
-                    wavedata = NULL;
-                }
-            }
+        waveform_generate_wavedata (w, it, uri, wavedata);
+        if (CONFIG_CACHE_ENABLED) {
+            waveform_db_cache (w, it, wavedata);
         }
-        if (uri) {
-            free (uri);
-            uri = NULL;
+        queue_pop (uri);
+
+        DB_playItem_t *playing = deadbeef->streamer_get_playing_track ();
+        if (playing && it && it == playing) {
+            deadbeef->mutex_lock (w->mutex);
+            memcpy (w->wave->data, wavedata->data, wavedata->data_len * sizeof (short));
+            w->wave->data_len = wavedata->data_len;
+            w->wave->channels = wavedata->channels;
+            deadbeef->mutex_unlock (w->mutex);
+            g_idle_add (waveform_redraw_cb, w);
+
+        }
+        if (playing) {
+            deadbeef->pl_item_unref (playing);
+        }
+
+        if (wavedata->data) {
+            free (wavedata->data);
+            wavedata->data = NULL;
+        }
+        if (wavedata->fname) {
+            free (wavedata->fname);
+            wavedata->fname = NULL;
+        }
+        if (wavedata) {
+            free (wavedata);
+            wavedata = NULL;
         }
     }
-    if (it) {
-        deadbeef->pl_item_unref (it);
-    }
+
+    free (uri);
+    uri = NULL;
+
+    deadbeef->pl_item_unref (it);
     deadbeef->background_job_decrement ();
 }
 
