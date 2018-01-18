@@ -23,11 +23,12 @@
 #include "config.h"
 #include "waveform.h"
 
-#define TEXT_SPACING 20
+#define TEXT_SPACING 40
 #define TEXT_MARKER_SPACING 3
 #define RULER_MAX_LABELS 30
 #define RULER_LINE_WIDTH 1.0
 #define RULER_FONT_SIZE 8.0
+#define RULER_SUB_MARKER_SPACING_MIN 3.0
 
 typedef enum
 {
@@ -51,47 +52,69 @@ typedef struct
 {
     TimeValueID id;
     float value;
+    // a logical division for values in between
+    // e.g. given 10s steps it makes more sense to divide each step by 2 than by 3
+    // to highlight the 5s instead of the 3.333s steps in between
+    //
+    //             | 5s
+    //             V
+    //   | 10s     |         | 20s
+    //   |---------------------------------...
+    int sub_div;
 } ruler_time_value_t;
 
 static ruler_time_value_t time_scale[] = {
     {   TIME_ID_6H,
         6 * 3600.f, // 6 Hours
+        3,
     },
     {   TIME_ID_1H,
         3600.f, // 1 hour
+        2,
     },
     {   TIME_ID_30M,
         1800.f, // 30 min
+        2,
     },
     {   TIME_ID_15M,
         900.f,  // 15 min
+        3,
     },
     {   TIME_ID_10M,
         600.f,  // 10 min
+        2,
     },
     {   TIME_ID_5M,
         300.f,  // 5 min
+        5,
     },
     {   TIME_ID_1M,
         60.f,   // 1 min
+        2,
     },
     {   TIME_ID_30S,
         30.f,   // 30 sec
+        3,
     },
     {   TIME_ID_10S,
         10.f,   // 10 sec
+        2,
     },
     {   TIME_ID_5S,
         5.f,    // 5 sec
+        2,
     },
     {   TIME_ID_1S,
         1.f,    // 1 sec
+        5,
     },
     {   TIME_ID_500MS,
         0.5f,   // 0.5 sec
+        5,
     },
     {   TIME_ID_100MS,
         0.1f,   // 0.1 sec
+        5,
     },
 };
 
@@ -253,6 +276,29 @@ ruler_time_find_resolution (cairo_t *cr,
 }
 
 void
+ruler_sub_marker_draw (cairo_t *cr_ctx,
+                       ruler_time_resolution_t *res,
+                       double x,
+                       double y,
+                       double width,
+                       double height)
+{
+    const int sub_div = res->value.sub_div;
+    const double marker_dist = width / sub_div;
+
+    if (marker_dist >= RULER_SUB_MARKER_SPACING_MIN) {
+        const double m_height = floor (height/3);
+        double x_start = x + marker_dist;
+        for (int i = 1; i < sub_div; i++) {
+            cairo_move_to (cr_ctx, x_start, y);
+            cairo_line_to (cr_ctx, x_start, y - m_height);
+            cairo_stroke (cr_ctx);
+            x_start += marker_dist;
+        }
+    }
+}
+
+void
 waveform_render_ruler (cairo_t *cr_ctx,
                        waveform_colors_t *color,
                        float duration,
@@ -296,11 +342,25 @@ waveform_render_ruler (cairo_t *cr_ctx,
     }
 
     const double x_start = res->value.value/duration * rect->width;
-    const double center = (rect->height - RULER_LINE_WIDTH)/2;
-    const double y = center + ruler_text_height_get (cr_ctx)/2;
+    const double center = (rect->height - RULER_LINE_WIDTH)/2.0;
+    const double center_abs = rect->height/2.0;
+    const double y = center + ruler_text_height_get (cr_ctx)/2.0;
 
-    double x = rect->x + x_start;
-    for (int i = 0; i < res->n; i++) {
+    double x = rect->x;
+    for (int i = 1; i <= res->n; i++) {
+        // Draw sub time markers
+        //
+        //     |
+        //     v
+        //     .    | 0:30 .    | 1:00 .    | 1:30 .    | 2:00
+        // ---------------------------------------------------
+        //
+        //                   Waveform
+        //
+        ruler_sub_marker_draw (cr_ctx, res, x, rect->height, x_start, center_abs);
+
+        x += x_start;
+
         // Draw time markers
         //
         //       |
@@ -310,9 +370,10 @@ waveform_render_ruler (cairo_t *cr_ctx,
         //
         //                   Waveform
         //
-        cairo_move_to (cr_ctx, x, rect->height/2);
+        cairo_move_to (cr_ctx, x, center_abs);
         cairo_line_to (cr_ctx, x, rect->height);
         cairo_stroke (cr_ctx);
+
 
         // Draw time labels
         //
@@ -325,9 +386,11 @@ waveform_render_ruler (cairo_t *cr_ctx,
         //
         cairo_move_to (cr_ctx, x + TEXT_MARKER_SPACING, y);
         char time_text[100] = "";
-        ruler_format_time (time_text, sizeof (time_text)/sizeof (char), &res->value, i+1);
+        ruler_format_time (time_text, sizeof (time_text)/sizeof (char), &res->value, i);
         cairo_show_text (cr_ctx, time_text);
-        x += x_start;
     }
+
+    // Draw sub markers after the last label
+    ruler_sub_marker_draw (cr_ctx, res, x, rect->height, x_start, center_abs);
 }
 

@@ -1176,7 +1176,7 @@ waveform_create (void)
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
     gtk_widget_set_size_request (w->base.widget, 300, 96);
-    gtk_widget_set_size_request (w->ruler, -1, 12);
+    gtk_widget_set_size_request (w->ruler, -1, 20);
     gtk_widget_set_size_request (w->drawarea, -1, -1);
     gtk_widget_add_events (w->base.widget, GDK_SCROLL_MASK);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->frame);
