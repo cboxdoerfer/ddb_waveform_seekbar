@@ -36,9 +36,6 @@
 #include <fcntl.h>
 
 int
-check_dir (const char *dir, mode_t mode);
-
-int
 queue_add (const char *fname);
 
 void

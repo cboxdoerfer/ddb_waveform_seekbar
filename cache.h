@@ -34,7 +34,7 @@
 #include <sqlite3.h>
 
 void
-waveform_db_open ();
+waveform_db_open (const char *fname);
 
 void
 waveform_db_close ();

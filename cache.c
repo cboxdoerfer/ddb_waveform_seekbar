@@ -29,13 +29,12 @@
 static sqlite3 *db;
 
 void
-waveform_db_open (char* path, int size)
+waveform_db_open (const char* path)
 {
-    int rc;
-
     sqlite3_close(db);
-    sprintf (path + size, "wavecache.db");
-    rc = sqlite3_open(path, &db);
+    char db_path[1024] = "";
+    snprintf (db_path, sizeof(db_path)/sizeof (char), "%s/%s", path, "wavecache.db");
+    int rc = sqlite3_open(db_path, &db);
     if (rc) {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
         sqlite3_close(db);

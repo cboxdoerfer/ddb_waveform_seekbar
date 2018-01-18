@@ -48,32 +48,6 @@ static cache_query_t *queue;
 static cache_query_t *queue_tail;
 
 int
-check_dir (const char *dir, mode_t mode)
-{
-    char *tmp = strdup (dir);
-    char *slash = tmp;
-    struct stat stat_buf;
-    do
-    {
-        slash = strstr (slash+1, "/");
-        if (slash)
-            *slash = 0;
-        if (-1 == stat (tmp, &stat_buf))
-        {
-            if (0 != mkdir (tmp, mode))
-            {
-                free (tmp);
-                return 0;
-            }
-        }
-        if (slash)
-            *slash = '/';
-    } while (slash);
-    free (tmp);
-    return 1;
-}
-
-int
 queue_add (const char *fname)
 {
     if (!mutex) {

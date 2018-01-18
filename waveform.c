@@ -60,7 +60,6 @@ static DB_misc_t plugin;
 static ddb_gtkui_t *gtkui_plugin = NULL;
 
 static char cache_path[PATH_MAX];
-static int cache_path_size;
 
 enum PLAYBACK_STATUS { STOPPED = 0, PLAYING = 1, PAUSED = 2 };
 static int playback_status = STOPPED;
@@ -181,18 +180,14 @@ on_config_changed (void *widget)
     return 0;
 }
 
-static int
+static void
 make_cache_dir (char *path, int size)
 {
-    const char *cache = getenv ("XDG_CACHE_HOME");
-    if (cache && strcmp(cache, "") == 0) {
-        cache = NULL;
+    const char *cache_dir = g_get_user_cache_dir ();
+    if (cache_dir) {
+        snprintf (path, size, "%s/deadbeef/waveform_seekbar", cache_dir);
+        g_mkdir_with_parents (path, 0755);
     }
-    const int sz = snprintf (path, size, cache ? "%s/deadbeef/waveform/" : "%s/.cache/deadbeef/waveform/", cache ? cache : getenv ("HOME"));
-    if (!check_dir (path, 0755)) {
-        return 0;
-    }
-    return sz;
 }
 
 static char *
@@ -1133,10 +1128,10 @@ waveform_init (ddb_gtkui_widget_t *w)
     wf->height = a.height;
     wf->width = a.width;
 
-    cache_path_size = make_cache_dir (cache_path, sizeof (cache_path));
+    make_cache_dir (cache_path, sizeof (cache_path)/sizeof (char));
 
     deadbeef->mutex_lock (wf->mutex);
-    waveform_db_open (cache_path, cache_path_size);
+    waveform_db_open (cache_path);
     waveform_db_init (NULL);
     deadbeef->mutex_unlock (wf->mutex);
 
