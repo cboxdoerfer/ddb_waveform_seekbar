@@ -45,6 +45,8 @@ typedef enum
     TIME_ID_1S,
     TIME_ID_500MS,
     TIME_ID_100MS,
+    TIME_ID_50MS,
+    TIME_ID_10MS,
     N_TIME_IDS,
 } TimeValueID;
 
@@ -116,6 +118,14 @@ static ruler_time_value_t time_scale[] = {
         0.1f,   // 0.1 sec
         5,
     },
+    {   TIME_ID_50MS,
+        0.05f,   // 0.05 sec
+        5,
+    },
+    {   TIME_ID_10MS,
+        0.01f,   // 0.01 sec
+        5,
+    },
 };
 
 typedef struct
@@ -141,7 +151,6 @@ ruler_format_time (char *dest, size_t dest_size, ruler_time_value_t *time_val, i
     const int hours = (int)time_in_seconds/3600;
     const int minutes = (int)time_in_seconds/60;
     const int seconds = (int)time_in_seconds;
-    const int milliseconds = (int)(time_in_seconds * 10);
 
     int time_remaining = 0;
     switch (time_val->id) {
@@ -176,7 +185,9 @@ ruler_format_time (char *dest, size_t dest_size, ruler_time_value_t *time_val, i
             break;
         case TIME_ID_500MS:
         case TIME_ID_100MS:
-            snprintf (dest, dest_size, "0.%d", milliseconds);
+        case TIME_ID_50MS:
+        case TIME_ID_10MS:
+            snprintf (dest, dest_size, "%.2f", time_in_seconds);
             break;
         default:
             return;
