@@ -1129,8 +1129,14 @@ waveform_init (ddb_gtkui_widget_t *w)
     wf->wave->fname = NULL;
     wf->wave->data_len = 0;
     wf->wave->channels = 0;
-    wf->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
-    wf->surf_shaded = cairo_image_surface_create (CAIRO_FORMAT_RGB24, a.width, a.height);
+    wf->surf = gdk_window_create_similar_surface (gtk_widget_get_window (wf->drawarea),
+                                                  CAIRO_CONTENT_COLOR,
+                                                  a.width,
+                                                  a.height);
+    wf->surf_shaded = gdk_window_create_similar_surface (gtk_widget_get_window (wf->drawarea),
+                                                         CAIRO_CONTENT_COLOR,
+                                                         a.width,
+                                                         a.height);
     deadbeef->mutex_unlock (wf->mutex);
     wf->seekbar_moving = 0;
     wf->height = a.height;
