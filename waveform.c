@@ -286,7 +286,7 @@ ruler_redraw_cb (void *user_data)
 {
     waveform_t *w = user_data;
     gtk_widget_queue_draw (w->ruler);
-    return FALSE;
+    return G_SOURCE_REMOVE;
 }
 
 static gboolean
@@ -294,7 +294,7 @@ waveform_draw_cb (void *user_data)
 {
     waveform_t *w = user_data;
     gtk_widget_queue_draw (w->drawarea);
-    return TRUE;
+    return G_SOURCE_CONTINUE;
 }
 
 static gboolean
@@ -308,7 +308,7 @@ waveform_redraw_cb (void *user_data)
     waveform_draw (w, 0);
     waveform_draw (w, 1);
     gtk_widget_queue_draw (w->drawarea);
-    return FALSE;
+    return G_SOURCE_REMOVE;
 }
 
 static void
@@ -888,7 +888,7 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
     cairo_destroy (cr);
 }
 
-static void
+static gboolean
 waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
 {
     waveform_t *w = user_data;
@@ -912,6 +912,8 @@ waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
     waveform_scale (w, cr, x, y, width, height);
     waveform_seekbar_draw (w, cr, x, y, width, height);
     cairo_destroy (cr);
+
+    return FALSE;
 }
 
 static gboolean
@@ -1035,14 +1037,7 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
 
     switch (id) {
     case DB_EV_SONGSTARTED:
-        //ddb_event_track_t *ev (ddb_event_track_t *)ctx;
         playback_status = PLAYING;
-        //deadbeef->mutex_lock (w->mutex);
-        //memset (w->wave->data, 0, sizeof (short) * w->max_buffer_len);
-        //w->wave->data_len = 0;
-        //w->wave->channels = 0;
-        //deadbeef->mutex_unlock (w->mutex);
-        //queue_add (deadbeef->pl_find_meta_raw (ev->track, ":URI"));
         waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         g_idle_add (waveform_redraw_cb, w);
         g_idle_add (ruler_redraw_cb, w);
@@ -1065,14 +1060,13 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
         on_config_changed (w);
         break;
     case DB_EV_PAUSED:
-        if (deadbeef->get_output ()->state () == OUTPUT_STATE_PLAYING) {
+        if (p1) {
+            playback_status = PAUSED;
+        }
+        else {
             playback_status = PLAYING;
             waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         }
-        else {
-            playback_status = PAUSED;
-        }
-        break;
     }
     return 0;
 }
