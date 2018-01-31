@@ -312,12 +312,17 @@ waveform_redraw_cb (void *user_data)
 }
 
 static void
-waveform_seekbar_draw (gpointer user_data, cairo_t *cr, int left, int top, int width, int height)
+waveform_seekbar_draw (gpointer user_data, cairo_t *cr, waveform_rect_t *rect)
 {
     waveform_t *w = user_data;
     if (playback_status == STOPPED) {
         return;
     }
+
+    double left = rect->x;
+    double top = rect->y;
+    double width = rect->width;
+    double height = rect->height;
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (trk) {
@@ -508,20 +513,20 @@ waveform_draw (void *user_data, int shaded)
 }
 
 static void
-waveform_scale (void *user_data, cairo_t *cr, int x, int y, int width, int height)
+waveform_scale (void *user_data, cairo_t *cr, waveform_rect_t *rect)
 {
     waveform_t *w = user_data;
 
-    if (height != w->height || width != w->width) {
+    if (rect->height != w->height || rect->width != w->width) {
         cairo_save (cr);
-        cairo_translate (cr, x, y);
-        cairo_scale (cr, width/w->width, height/w->height);
-        cairo_set_source_surface (cr, w->surf, x, y);
+        cairo_translate (cr, rect->x, rect->y);
+        cairo_scale (cr, rect->width/w->width, rect->height/w->height);
+        cairo_set_source_surface (cr, w->surf, rect->x, rect->y);
         cairo_paint (cr);
         cairo_restore (cr);
     }
     else {
-        cairo_set_source_surface (cr, w->surf, x, y);
+        cairo_set_source_surface (cr, w->surf, rect->x, rect->y);
         cairo_paint (cr);
     }
 }
@@ -900,12 +905,15 @@ waveform_draw_generic_event (waveform_t *w, cairo_t *cr)
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
 
-    const int x = 0;
-    const int y = 0;
-    const int width = a.width;
-    const int height = a.height;
-    waveform_scale (w, cr, x, y, width, height);
-    waveform_seekbar_draw (w, cr, x, y, width, height);
+    waveform_rect_t rect = {
+        .x = 0,
+        .y = 0,
+        .width = a.width,
+        .height = a.height,
+    };
+
+    waveform_scale (w, cr, &rect);
+    waveform_seekbar_draw (w, cr, &rect);
 }
 
 #if !GTK_CHECK_VERSION(3,0,0)
