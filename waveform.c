@@ -888,10 +888,9 @@ ruler_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data
     cairo_destroy (cr);
 }
 
-static gboolean
-waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
+static void
+waveform_draw_generic_event (waveform_t *w, cairo_t *cr)
 {
-    waveform_t *w = user_data;
     if (playback_status != PLAYING) {
         if (w->drawtimer) {
             g_source_remove (w->drawtimer);
@@ -900,10 +899,6 @@ waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
     }
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
-#pragma GCC diagnostic pop
 
     const int x = 0;
     const int y = 0;
@@ -911,10 +906,29 @@ waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
     const int height = a.height;
     waveform_scale (w, cr, x, y, width, height);
     waveform_seekbar_draw (w, cr, x, y, width, height);
+}
+
+#if !GTK_CHECK_VERSION(3,0,0)
+static gboolean
+waveform_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data)
+{
+    waveform_t *w = user_data;
+    cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (w->drawarea));
+    waveform_draw_generic_event (w, cr);
     cairo_destroy (cr);
 
-    return FALSE;
+    return TRUE;
 }
+#else
+static gboolean
+waveform_draw_event (GtkWidget *widget, cairo_t *cr, gpointer user_data)
+{
+    waveform_t *w = user_data;
+    waveform_draw_generic_event (w, cr);
+
+    return TRUE;
+}
+#endif
 
 static gboolean
 waveform_configure_event (GtkWidget *widget, GdkEvent *event, gpointer user_data)
@@ -1205,7 +1219,7 @@ waveform_create (void)
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect_after ((gpointer) w->drawarea, "expose_event", G_CALLBACK (waveform_expose_event), w);
 #else
-    g_signal_connect_after ((gpointer) w->drawarea, "draw", G_CALLBACK (waveform_expose_event), w);
+    g_signal_connect_after ((gpointer) w->drawarea, "draw", G_CALLBACK (waveform_draw_event), w);
 #endif
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect_after ((gpointer) w->ruler, "expose_event", G_CALLBACK (ruler_expose_event), w);
