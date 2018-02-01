@@ -44,7 +44,7 @@
 #include "render.h"
 #include "ruler.h"
 
-#define C_COLOUR(X) (X)->r, (X)->g, (X)->b, (X)->a
+#define W_COLOR(X) (X)->r, (X)->g, (X)->b, (X)->a
 
 //#define M_PI (3.1415926535897932384626433832795029)
 // min, max, rms
@@ -114,6 +114,25 @@ waveform_draw (void *user_data, int shaded);
 static gboolean
 waveform_set_refresh_interval (void *user_data, int interval);
 
+static color_t
+waveform_color_contrast (color_t *color)
+{
+    // Counting the perceptive luminance - human eye favors green color...
+    double a = 1.0 - ( 2.0 * color->r + 3.0 * color->g + color->b) / 6.0;
+    if (a < 0.5)
+        a = 0.0; // bright colors - black font
+    else
+        a = 1.0; // dark colors - white font
+
+    color_t color_cont = {
+        .r = a,
+        .g = a,
+        .b = a,
+        .a = 1.0,
+    };
+    return color_cont;
+}
+
 static void
 waveform_colors_update (waveform_t *w)
 {
@@ -136,17 +155,25 @@ waveform_colors_update (waveform_t *w)
         1.0
     };
 
-    w->colors_shaded.fg = (color_t) {
+    w->colors.pb = (color_t) {
         CONFIG_PB_COLOR.red/65535.f,
         CONFIG_PB_COLOR.green/65535.f,
         CONFIG_PB_COLOR.blue/65535.f,
         1.0
     };
+
+    w->colors.font = waveform_color_contrast (&w->colors.bg);
+    w->colors.font_pb = waveform_color_contrast (&w->colors.pb);
+
+    w->colors_shaded.fg = w->colors.pb;
     w->colors_shaded.bg = w->colors.bg;
+    w->colors_shaded.pb = w->colors.pb;
+    w->colors_shaded.pb.a = CONFIG_PB_ALPHA/65535.f;
+
     w->colors_shaded.rms = (color_t) {
-        0.8 * CONFIG_PB_COLOR.red/65535.f,
-        0.8 * CONFIG_PB_COLOR.green/65535.f,
-        0.8 * CONFIG_PB_COLOR.blue/65535.f,
+        0.8 * w->colors.pb.r,
+        0.8 * w->colors.pb.g,
+        0.8 * w->colors.pb.b,
         1.0
     };
 }
@@ -208,20 +235,6 @@ waveform_format_uri (DB_playItem_t *it, const char *uri)
     return key;
 }
 
-static void
-color_contrast (GdkColor * color)
-{
-    // Counting the perceptive luminance - human eye favors green color...
-    int a = 65535 - ( 2 * color->red + 3 * color->green + color->blue) / 6;
-    if (a < 32768)
-        a = 0; // bright colors - black font
-    else
-        a = 65535; // dark colors - white font
-    color->red = a;
-    color->blue = a;
-    color->green = a;
-}
-
 enum BORDERS
 {
     CORNER_NONE        = 0,
@@ -274,10 +287,10 @@ clearlooks_rounded_rectangle (cairo_t * cr,
 }
 
 static inline void
-draw_cairo_rectangle (cairo_t *cr, const GdkColor *c, int alpha, float x, int y, float width, int height)
+waveform_draw_cairo_rectangle (cairo_t *cr, color_t *clr, waveform_rect_t *rect)
 {
-    cairo_set_source_rgba (cr, c->red/65535.f, c->green/65535.f, c->blue/65535.f, alpha/65535.f);
-    cairo_rectangle (cr, x, y, width, height);
+    cairo_set_source_rgba (cr, W_COLOR (clr));
+    cairo_rectangle (cr, rect->x, rect->y, rect->width, rect->height);
     cairo_fill (cr);
 }
 
@@ -312,25 +325,108 @@ waveform_redraw_cb (void *user_data)
 }
 
 static void
+waveform_draw_text (cairo_t *cr, waveform_colors_t *color, const char *text, double x, double y)
+{
+    cairo_set_source_rgba (cr, W_COLOR (&color->font));
+    cairo_set_font_size (cr, CONFIG_FONT_SIZE);
+
+    cairo_text_extents_t ex;
+    cairo_text_extents (cr, text, &ex);
+    const double text_x = x - ex.width/2;
+    const double text_y = y + ex.height/2;
+    cairo_move_to (cr, text_x, text_y);
+    cairo_show_text (cr, text);
+}
+
+static void
+waveform_draw_seeking_cursor (waveform_t *w, cairo_t *cr, float duration, waveform_rect_t *rect)
+{
+    float seek_pos = floor(CLAMP (w->seekbar_move_x, rect->x, rect->x + rect->width));
+
+    waveform_rect_t cursor_rect = {
+        .x = seek_pos - CONFIG_CURSOR_WIDTH,
+        .y = rect->y,
+        .width = CONFIG_CURSOR_WIDTH,
+        .height = rect->height,
+    };
+    waveform_draw_cairo_rectangle (cr, &w->colors.pb, &cursor_rect);
+
+    if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
+        w->seekbar_move_x_clicked = -1;
+
+        const float cur_time = CLAMP (w->seekbar_move_x * duration / rect->width, 0, duration);
+        const int hr = cur_time / 3600;
+        const int mn = (cur_time - hr * 3600)/60;
+        const int sc = cur_time - hr * 3600 - mn * 60;
+
+        char s[100] = "";
+        snprintf (s, sizeof (s), "%02d:%02d:%02d", hr, mn, sc);
+
+        cairo_set_source_rgba (cr, W_COLOR (&w->colors.pb));
+        cairo_set_font_size (cr, CONFIG_FONT_SIZE);
+        cairo_select_font_face (cr,
+                                "monospace",
+                                CAIRO_FONT_SLANT_NORMAL,
+                                CAIRO_FONT_WEIGHT_NORMAL);
+
+
+        cairo_text_extents_t text_size;
+        cairo_text_extents (cr, s, &text_size);
+
+        const double rec_padding = 5;
+        const double rec_padding_total = 2 * rec_padding;
+        const double rec_width = ceil (text_size.x_advance) + rec_padding_total;
+        const double rec_height = ceil (text_size.height) + rec_padding_total;
+        double rec_pos = ceil (seek_pos - rec_width);
+        double text_pos = rec_pos + rec_padding;
+
+        //uint8_t corners = CORNER_TOPLEFT | CORNER_BOTTOMLEFT;
+        uint8_t corners = CORNER_NONE;
+        if (seek_pos < rec_width) {
+            rec_pos = 0;
+            text_pos = rec_pos + rec_padding;
+            //corners = CORNER_TOPRIGHT | CORNER_BOTTOMRIGHT;
+        }
+
+
+        clearlooks_rounded_rectangle (cr, rec_pos, (rect->height - text_size.height - rec_padding_total)/2, rec_width, rec_height, 3, corners);
+        cairo_fill (cr);
+        cairo_move_to (cr, text_pos, (rect->height + text_size.height)/2);
+        cairo_set_source_rgba (cr, W_COLOR (&w->colors.font_pb));
+        cairo_show_text (cr, s);
+    }
+}
+
+static void
 waveform_seekbar_draw (gpointer user_data, cairo_t *cr, waveform_rect_t *rect)
 {
     waveform_t *w = user_data;
     if (playback_status == STOPPED) {
         return;
     }
-
-    double left = rect->x;
-    double top = rect->y;
-    double width = rect->width;
-    double height = rect->height;
-
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
-    if (trk) {
-        const float dur = deadbeef->pl_get_item_duration (trk);
-        const float pos = (deadbeef->streamer_get_playpos () * width)/ dur + left;
-        float seek_pos = 0;
-        int cursor_width = CONFIG_CURSOR_WIDTH;
+    if (!trk) {
+        return;
+    }
 
+    const double left = rect->x;
+    const double top = rect->y;
+    const double width = rect->width;
+    const double height = rect->height;
+
+    const float dur = deadbeef->pl_get_item_duration (trk);
+    const float pos = (deadbeef->streamer_get_playpos () * width)/ dur + left;
+    int cursor_width = CONFIG_CURSOR_WIDTH;
+
+    if (!deadbeef->is_local_file (deadbeef->pl_find_meta_raw (trk, ":URI"))) {
+        if (w->drawtimer) {
+            g_source_remove (w->drawtimer);
+            w->drawtimer = 0;
+        }
+        waveform_draw_cairo_rectangle (cr, &w->colors.bg, rect);
+        waveform_draw_text (cr, &w->colors, "Streaming...", width/2,height/2);
+    }
+    else {
         if (height != w->height || width != w->width) {
             cairo_save (cr);
             cairo_translate (cr, 0, 0);
@@ -346,82 +442,20 @@ waveform_seekbar_draw (gpointer user_data, cairo_t *cr, waveform_rect_t *rect)
             cairo_fill (cr);
         }
 
-        draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, pos - cursor_width, top, cursor_width, height);
+        waveform_rect_t cursor_rect = {
+            .x = pos - cursor_width,
+            .y = top,
+            .width = cursor_width,
+            .height = height,
+        };
+        waveform_draw_cairo_rectangle (cr, &w->colors.pb, &cursor_rect);
 
-        if (w->seekbar_moving && dur > 0) {
-            if (w->seekbar_move_x < left) {
-                seek_pos = left;
-            }
-            else if (w->seekbar_move_x > width + left) {
-                seek_pos = width + left;
-            }
-            else {
-                seek_pos = w->seekbar_move_x;
-            }
-
-            if (cursor_width == 0) {
-                cursor_width = 1;
-            }
-            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, 65535, seek_pos - cursor_width, top, cursor_width, height);
-
-            if (w->seekbar_move_x != w->seekbar_move_x_clicked || w->seekbar_move_x_clicked == -1) {
-                w->seekbar_move_x_clicked = -1;
-
-                const float time = CLAMP (w->seekbar_move_x * dur / (width), 0, dur);
-                const int hr = time/3600;
-                const int mn = (time-hr*3600)/60;
-                const int sc = time-hr*3600-mn*60;
-
-                char s[1000];
-                snprintf (s, sizeof (s), "%02d:%02d:%02d", hr, mn, sc);
-
-                cairo_save (cr);
-                cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
-                cairo_set_font_size (cr, CONFIG_FONT_SIZE);
-
-                cairo_text_extents_t ex;
-                cairo_text_extents (cr, s, &ex);
-
-                const int rec_width = ex.width + 10;
-                const int rec_height = ex.height + 10;
-                int rec_pos = seek_pos - rec_width;
-                int text_pos = rec_pos + 5;
-
-                if (seek_pos < rec_width) {
-                    rec_pos = 0;
-                    text_pos = rec_pos + 5;
-                }
-
-                uint8_t corners = 0xff;
-
-                clearlooks_rounded_rectangle (cr, rec_pos, (height - ex.height - 10)/2, rec_width, rec_height, 3, corners);
-                cairo_fill (cr);
-                cairo_move_to (cr, text_pos, (height + ex.height)/2);
-                GdkColor color_text = CONFIG_PB_COLOR;
-                color_contrast (&color_text);
-                cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
-                cairo_show_text (cr, s);
-                cairo_restore (cr);
-            }
+        if (w->seekbar_moving && dur >= 0) {
+            waveform_draw_seeking_cursor (w, cr, dur, rect);
         }
-        else if (!deadbeef->is_local_file (deadbeef->pl_find_meta_raw (trk, ":URI"))) {
-            const char *text = "Streaming...";
-            cairo_save (cr);
-            cairo_set_source_rgba (cr, CONFIG_PB_COLOR.red/65535.f, CONFIG_PB_COLOR.green/65535.f, CONFIG_PB_COLOR.blue/65535.f, 1);
-            cairo_set_font_size (cr, CONFIG_FONT_SIZE);
-            cairo_text_extents_t ex;
-            cairo_text_extents (cr, text, &ex);
-            const int text_x = (width - ex.width)/2;
-            const int text_y = (height + ex.height - 3)/2;
-            cairo_move_to (cr, text_x, text_y);
-            GdkColor color_text = CONFIG_BG_COLOR;
-            color_contrast (&color_text);
-            cairo_set_source_rgba (cr, color_text.red/65535.f, color_text.green/65535.f, color_text.blue/65535.f, 1);
-            cairo_show_text (cr, text);
-            cairo_restore (cr);
-        }
-        deadbeef->pl_item_unref (trk);
     }
+
+    deadbeef->pl_item_unref (trk);
 }
 
 static cairo_surface_t *
@@ -467,7 +501,14 @@ waveform_draw (void *user_data, int shaded)
     waveform_data_render_t *w_render_ctx = waveform_render_data_build (w->wave, width, CONFIG_MIX_TO_MONO);
 
     // Draw background
-    draw_cairo_rectangle (cr, &CONFIG_BG_COLOR, 65535, 0, 0, width, height);
+    waveform_rect_t bg_rect = {
+        .x = 0,
+        .y = 0,
+        .width = width,
+        .height = height,
+    };
+    waveform_draw_cairo_rectangle (cr, &w->colors.bg, &bg_rect);
+
     if (w_render_ctx) {
 
         const int channels = w_render_ctx->num_channels;
@@ -502,7 +543,7 @@ waveform_draw (void *user_data, int shaded)
             }
         }
         if (!CONFIG_SHADE_WAVEFORM && shaded == 1) {
-            draw_cairo_rectangle (cr, &CONFIG_PB_COLOR, CONFIG_PB_ALPHA, 0, 0, width, height);
+            waveform_draw_cairo_rectangle (cr, &w->colors_shaded.pb, &bg_rect);
         }
 
         waveform_data_render_free (w_render_ctx);
@@ -1151,14 +1192,12 @@ waveform_init (ddb_gtkui_widget_t *w)
     wf->wave->fname = NULL;
     wf->wave->data_len = 0;
     wf->wave->channels = 0;
-    wf->surf = gdk_window_create_similar_surface (gtk_widget_get_window (wf->drawarea),
-                                                  CAIRO_CONTENT_COLOR,
+    wf->surf = cairo_image_surface_create (CAIRO_FORMAT_RGB24,
+                                           a.width,
+                                           a.height);
+    wf->surf_shaded = cairo_image_surface_create (CAIRO_FORMAT_RGB24,
                                                   a.width,
                                                   a.height);
-    wf->surf_shaded = gdk_window_create_similar_surface (gtk_widget_get_window (wf->drawarea),
-                                                         CAIRO_CONTENT_COLOR,
-                                                         a.width,
-                                                         a.height);
     deadbeef->mutex_unlock (wf->mutex);
     wf->seekbar_moving = 0;
     wf->height = a.height;
