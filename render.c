@@ -541,6 +541,8 @@ waveform_render_wave_default_values (cairo_t *cr_ctx,
             render_func_1= waveform_render_default_sample_rms1;
             render_func_2= waveform_render_default_sample_rms2;
             break;
+        default:
+            return;
     }
 
     double y_scale = 0.5 * height;
