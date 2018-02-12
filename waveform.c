@@ -299,7 +299,7 @@ ruler_redraw_cb (void *user_data)
 {
     waveform_t *w = user_data;
     gtk_widget_queue_draw (w->ruler);
-    return G_SOURCE_REMOVE;
+    return FALSE;
 }
 
 static gboolean
@@ -307,7 +307,7 @@ waveform_draw_cb (void *user_data)
 {
     waveform_t *w = user_data;
     gtk_widget_queue_draw (w->drawarea);
-    return G_SOURCE_CONTINUE;
+    return TRUE;
 }
 
 static gboolean
@@ -321,7 +321,7 @@ waveform_redraw_cb (void *user_data)
     waveform_draw (w, 0);
     waveform_draw (w, 1);
     gtk_widget_queue_draw (w->drawarea);
-    return G_SOURCE_REMOVE;
+    return FALSE;
 }
 
 static void
