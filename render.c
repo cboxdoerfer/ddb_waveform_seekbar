@@ -603,7 +603,7 @@ waveform_draw_wave_default (waveform_sample_t *samples,
                             waveform_rect_t *rect)
 {
     cairo_set_line_width (cr_ctx, LINE_WIDTH_DEFAULT);
-    cairo_set_antialias (cr_ctx, CAIRO_ANTIALIAS_BEST);
+    cairo_set_antialias (cr_ctx, CAIRO_ANTIALIAS_DEFAULT);
     cairo_set_source_rgba (cr_ctx, W_COLOR (&colors->fg));
 
     waveform_render_wave_default_values (cr_ctx,
