@@ -32,26 +32,10 @@
 
 #include <deadbeef/deadbeef.h>
 
+#include "support.h"
 #include "config.h"
 #include "waveform.h"
 #include "config_dialog.h"
-
-#if !GTK_CHECK_VERSION(2,14,0)
-#define gtk_widget_get_window(widget) ((widget)->window)
-#define gtk_dialog_get_content_area(dialog) (dialog->vbox)
-#define gtk_dialog_get_action_area(dialog) (dialog->action_area)
-#endif
-
-#if !GTK_CHECK_VERSION(2,18,0)
-void
-gtk_widget_get_allocation (GtkWidget *widget, GtkAllocation *allocation) {
-    (allocation)->x = widget->allocation.x;
-    (allocation)->y = widget->allocation.y;
-    (allocation)->width = widget->allocation.width;
-    (allocation)->height = widget->allocation.height;
-}
-#define gtk_widget_set_can_default(widget, candefault) {if (candefault) GTK_WIDGET_SET_FLAGS (widget, GTK_CAN_DEFAULT); else GTK_WIDGET_UNSET_FLAGS(widget, GTK_CAN_DEFAULT);}
-#endif
 
 void
 on_button_config (GtkMenuItem *menuitem, gpointer user_data)

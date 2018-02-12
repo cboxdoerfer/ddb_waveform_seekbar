@@ -36,6 +36,7 @@
 #include <deadbeef/deadbeef.h>
 #include <deadbeef/gtkui_api.h>
 
+#include "support.h"
 #include "cache.h"
 #include "config.h"
 #include "config_dialog.h"
