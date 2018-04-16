@@ -64,6 +64,7 @@ static char cache_path[PATH_MAX];
 
 enum PLAYBACK_STATUS { STOPPED = 0, PLAYING = 1, PAUSED = 2 };
 static int playback_status = STOPPED;
+static int waveform_instancecount;
 
 typedef struct
 {
@@ -1174,6 +1175,10 @@ waveform_destroy (ddb_gtkui_widget_t *widget)
         deadbeef->mutex_free (w->mutex);
         w->mutex = 0;
     }
+
+    if (waveform_instancecount > 0) {
+        waveform_instancecount--;
+    }
 }
 
 static void
@@ -1281,6 +1286,9 @@ waveform_create (void)
     g_signal_connect_after ((gpointer) w->base.widget, "motion_notify_event", G_CALLBACK (waveform_motion_notify_event), w);
     g_signal_connect_after ((gpointer) w->popup_item, "activate", G_CALLBACK (on_button_config), w);
     gtkui_plugin->w_override_signals (w->base.widget, w);
+
+    waveform_instancecount++;
+
     return (ddb_gtkui_widget_t *)w;
 }
 
@@ -1363,6 +1371,9 @@ static DB_plugin_action_t lookup_action = {
 static DB_plugin_action_t *
 waveform_get_actions (DB_playItem_t *it)
 {
+    if (!waveform_instancecount) {
+        return NULL;
+    }
     deadbeef->pl_lock ();
     lookup_action.flags |= DB_ACTION_DISABLED;
     DB_playItem_t *current = deadbeef->pl_get_first (PL_MAIN);
