@@ -1249,6 +1249,7 @@ waveform_create (void)
 #endif
     w->frame = gtk_frame_new (NULL);
     w->popup = gtk_menu_new ();
+    gtk_menu_attach_to_widget (GTK_MENU (w->popup), w->base.widget, NULL);
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
     gtk_widget_set_size_request (w->base.widget, 300, 96);
