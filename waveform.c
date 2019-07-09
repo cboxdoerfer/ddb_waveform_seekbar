@@ -308,7 +308,24 @@ static gboolean
 waveform_draw_cb (void *user_data)
 {
     waveform_t *w = user_data;
-    gtk_widget_queue_draw (w->drawarea);
+
+    DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
+    if (!trk) {
+        return;
+    }
+    
+    GtkAllocation a;
+    gtk_widget_get_allocation (w->drawarea, &a);
+    const int width = a.width;
+    const int height = a.height;
+    const float dur = deadbeef->pl_get_item_duration (trk);
+    const float pos = (deadbeef->streamer_get_playpos () * width)/ dur;
+    // use 8 times (*8/1000 => /125 ) the amount of pixels per refresh to 
+    // prevent skipped areas
+    float size = width/dur * CONFIG_REFRESH_INTERVAL/125;
+    // redraw only from pos-size to pos+size
+    gtk_widget_queue_draw_area (w->drawarea, ceil (pos-size), 0, ceil (2*size), height);
+
     return TRUE;
 }
 
