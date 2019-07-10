@@ -323,6 +323,10 @@ waveform_draw_cb (void *user_data)
     // use 8 times (*8/1000 => /125 ) the amount of pixels per refresh to 
     // prevent skipped areas
     float size = width/dur * CONFIG_REFRESH_INTERVAL/125;
+
+    const double doubleCursorWidth = CONFIG_CURSOR_WIDTH * 2;
+    size = (size < doubleCursorWidth ? doubleCursorWidth : size);
+
     // redraw only from pos-size to pos+size
     gtk_widget_queue_draw_area (w->drawarea, ceil (pos-size), 0, ceil (2*size), height);
 
