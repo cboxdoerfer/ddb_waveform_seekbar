@@ -319,6 +319,8 @@ waveform_draw_cb (void *user_data)
     const int width = a.width;
     const int height = a.height;
     const float dur = deadbeef->pl_get_item_duration (trk);
+    deadbeef->pl_item_unref (trk);
+
     const float pos = (deadbeef->streamer_get_playpos () * width)/ dur;
     // use 8 times (*8/1000 => /125 ) the amount of pixels per refresh to 
     // prevent skipped areas
