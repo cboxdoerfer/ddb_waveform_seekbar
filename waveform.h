@@ -59,7 +59,7 @@ typedef struct
 
 typedef struct waveform_colors_s
 {
-    color_t fg, rms, bg, pb, font, font_pb;
+    color_t fg, rms, bg, pb, rlr, font, font_pb;
 } waveform_colors_t;
 
 enum STYLE { BARS = 1, SPIKES = 2 };

@@ -323,7 +323,7 @@ waveform_render_ruler (cairo_t *cr_ctx,
     cairo_set_antialias (cr_ctx, CAIRO_ANTIALIAS_NONE);
     cairo_set_line_width (cr_ctx, RULER_LINE_WIDTH);
     cairo_set_font_size (cr_ctx, RULER_FONT_SIZE);
-    cairo_set_source_rgba (cr_ctx, 0.0, 0.0, 0.0, 1.0);
+    cairo_set_source_rgba (cr_ctx, color->rlr.r, color->rlr.g, color->rlr.b, color->rlr.a);
 
     // Draw separator
     //         0:30     1:00     1:30     2:00

@@ -58,6 +58,10 @@
 #define     CONFSTR_WF_PB_COLOR_G        "waveform.pb_color_g"
 #define     CONFSTR_WF_PB_COLOR_B        "waveform.pb_color_b"
 #define     CONFSTR_WF_PB_ALPHA          "waveform.pb_alpha"
+#define     CONFSTR_WF_RLR_COLOR_R       "waveform.rlr_color_r"
+#define     CONFSTR_WF_RLR_COLOR_G       "waveform.rlr_color_g"
+#define     CONFSTR_WF_RLR_COLOR_B       "waveform.rlr_color_b"
+#define     CONFSTR_WF_RLR_ALPHA         "waveform.rlr_alpha"
 #define     CONFSTR_WF_FG_RMS_COLOR_R    "waveform.fg_rms_color_r"
 #define     CONFSTR_WF_FG_RMS_COLOR_G    "waveform.fg_rms_color_g"
 #define     CONFSTR_WF_FG_RMS_COLOR_B    "waveform.fg_rms_color_b"
@@ -83,10 +87,12 @@ extern gboolean CONFIG_SOUNDCLOUD_STYLE;
 extern GdkColor CONFIG_BG_COLOR;
 extern GdkColor CONFIG_FG_COLOR;
 extern GdkColor CONFIG_PB_COLOR;
+extern GdkColor CONFIG_RLR_COLOR;
 extern GdkColor CONFIG_FG_RMS_COLOR;
 extern guint16  CONFIG_BG_ALPHA;
 extern guint16  CONFIG_FG_ALPHA;
 extern guint16  CONFIG_PB_ALPHA;
+extern guint16  CONFIG_RLR_ALPHA;
 extern guint16  CONFIG_FG_RMS_ALPHA;
 extern gint     CONFIG_RENDER_METHOD;
 extern gint     CONFIG_FILL_WAVEFORM;

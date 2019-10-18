@@ -164,6 +164,13 @@ waveform_colors_update (waveform_t *w)
         1.0
     };
 
+    w->colors.rlr = (color_t) {
+        CONFIG_RLR_COLOR.red/65535.f,
+        CONFIG_RLR_COLOR.green/65535.f,
+        CONFIG_RLR_COLOR.blue/65535.f,
+        CONFIG_RLR_ALPHA/65535.f
+    };
+
     w->colors.font = waveform_color_contrast (&w->colors.bg);
     w->colors.font_pb = waveform_color_contrast (&w->colors.pb);
 
