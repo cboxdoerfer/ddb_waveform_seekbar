@@ -110,6 +110,9 @@ waveform_draw_cb (void *user_data);
 static gboolean
 waveform_redraw_cb (void *user_data);
 
+static gboolean
+ruler_redraw_cb (void *user_data);
+
 static void
 waveform_draw (void *user_data, int shaded);
 
@@ -213,6 +216,7 @@ on_config_changed (void *widget)
 
     waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
     g_idle_add (waveform_redraw_cb, w);
+    g_idle_add (ruler_redraw_cb, w);
     return 0;
 }
 
