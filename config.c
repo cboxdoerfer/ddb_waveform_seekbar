@@ -49,10 +49,12 @@ gboolean CONFIG_SOUNDCLOUD_STYLE = FALSE;
 GdkColor CONFIG_BG_COLOR;
 GdkColor CONFIG_FG_COLOR;
 GdkColor CONFIG_PB_COLOR;
+GdkColor CONFIG_RLR_COLOR;
 GdkColor CONFIG_FG_RMS_COLOR;
 guint16  CONFIG_BG_ALPHA;
 guint16  CONFIG_FG_ALPHA;
 guint16  CONFIG_PB_ALPHA;
+guint16  CONFIG_RLR_ALPHA;
 guint16  CONFIG_FG_RMS_ALPHA;
 gint     CONFIG_RENDER_METHOD = SPIKES;
 gint     CONFIG_FILL_WAVEFORM = 1;
@@ -94,6 +96,10 @@ save_config (void)
     deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_G,          CONFIG_PB_COLOR.green);
     deadbeef->conf_set_int (CONFSTR_WF_PB_COLOR_B,          CONFIG_PB_COLOR.blue);
     deadbeef->conf_set_int (CONFSTR_WF_PB_ALPHA,            CONFIG_PB_ALPHA);
+    deadbeef->conf_set_int (CONFSTR_WF_RLR_COLOR_R,         CONFIG_RLR_COLOR.red);
+    deadbeef->conf_set_int (CONFSTR_WF_RLR_COLOR_G,         CONFIG_RLR_COLOR.green);
+    deadbeef->conf_set_int (CONFSTR_WF_RLR_COLOR_B,         CONFIG_RLR_COLOR.blue);
+    deadbeef->conf_set_int (CONFSTR_WF_RLR_ALPHA,           CONFIG_RLR_ALPHA);
     deadbeef->conf_set_int (CONFSTR_WF_FG_RMS_COLOR_R,      CONFIG_FG_RMS_COLOR.red);
     deadbeef->conf_set_int (CONFSTR_WF_FG_RMS_COLOR_G,      CONFIG_FG_RMS_COLOR.green);
     deadbeef->conf_set_int (CONFSTR_WF_FG_RMS_COLOR_B,      CONFIG_FG_RMS_COLOR.blue);
@@ -135,6 +141,11 @@ load_config (void)
     CONFIG_PB_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_G,           65535);
     CONFIG_PB_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_PB_COLOR_B,                0);
     CONFIG_PB_ALPHA = deadbeef->conf_get_int (CONFSTR_WF_PB_ALPHA,                   20000);
+
+    CONFIG_RLR_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_RLR_COLOR_R,               0);
+    CONFIG_RLR_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_RLR_COLOR_G,             0);
+    CONFIG_RLR_COLOR.blue = deadbeef->conf_get_int (CONFSTR_WF_RLR_COLOR_B,              0);
+    CONFIG_RLR_ALPHA = deadbeef->conf_get_int (CONFSTR_WF_RLR_ALPHA,                 65535);
 
     CONFIG_FG_RMS_COLOR.red = deadbeef->conf_get_int (CONFSTR_WF_FG_RMS_COLOR_R,      5000);
     CONFIG_FG_RMS_COLOR.green = deadbeef->conf_get_int (CONFSTR_WF_FG_RMS_COLOR_G,    5000);
