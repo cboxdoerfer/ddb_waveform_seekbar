@@ -87,6 +87,7 @@ typedef struct
     float seekbar_move_x_clicked;
     float height;
     float width;
+    float pos_last;
     intptr_t mutex;
     cairo_surface_t *surf;
     cairo_surface_t *surf_shaded;
@@ -333,15 +334,15 @@ waveform_draw_cb (void *user_data)
     deadbeef->pl_item_unref (trk);
 
     const float pos = (deadbeef->streamer_get_playpos () * width)/ dur;
-    // use 8 times (*8/1000 => /125 ) the amount of pixels per refresh to 
-    // prevent skipped areas
-    float size = width/dur * CONFIG_REFRESH_INTERVAL/125;
+    if (pos < w->pos_last) {
+        w->pos_last = 0;
+    }
 
-    const double doubleCursorWidth = CONFIG_CURSOR_WIDTH * 2;
-    size = (size < doubleCursorWidth ? doubleCursorWidth : size);
+    const float x = floorf (w->pos_last - CONFIG_CURSOR_WIDTH);
+    const float l = ceilf (pos - w->pos_last + CONFIG_CURSOR_WIDTH);
+    gtk_widget_queue_draw_area (w->drawarea, x, 0, l, height);
 
-    // redraw only from pos-size to pos+size
-    gtk_widget_queue_draw_area (w->drawarea, ceil (pos-size), 0, ceil (2*size), height);
+    w->pos_last = pos;
 
     return TRUE;
 }
@@ -1242,6 +1243,7 @@ waveform_init (ddb_gtkui_widget_t *w)
     wf->seekbar_moving = 0;
     wf->height = a.height;
     wf->width = a.width;
+    wf->pos_last = 0;
 
     make_cache_dir (cache_path, sizeof (cache_path)/sizeof (char));
 
