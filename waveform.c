@@ -339,8 +339,8 @@ waveform_draw_cb (void *user_data)
     }
 
     const float x = floorf (w->pos_last - CONFIG_CURSOR_WIDTH);
-    const float l = ceilf (pos - w->pos_last + CONFIG_CURSOR_WIDTH);
-    gtk_widget_queue_draw_area (w->drawarea, x, 0, l, height);
+    const float dx = ceilf (pos - w->pos_last + CONFIG_CURSOR_WIDTH);
+    gtk_widget_queue_draw_area (w->drawarea, x, 0, dx, height);
 
     w->pos_last = pos;
 
