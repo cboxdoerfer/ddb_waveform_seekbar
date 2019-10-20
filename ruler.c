@@ -38,6 +38,7 @@ typedef enum
     TIME_ID_15M,
     TIME_ID_10M,
     TIME_ID_5M,
+    TIME_ID_2M,
     TIME_ID_1M,
     TIME_ID_30S,
     TIME_ID_10S,
@@ -89,6 +90,10 @@ static ruler_time_value_t time_scale[] = {
     {   TIME_ID_5M,
         300.f,  // 5 min
         5,
+    },
+    {   TIME_ID_2M,
+        120.f,  // 2 min
+        2,
     },
     {   TIME_ID_1M,
         60.f,   // 1 min
@@ -162,6 +167,7 @@ ruler_format_time (char *dest, size_t dest_size, ruler_time_value_t *time_val, i
         case TIME_ID_15M:
         case TIME_ID_10M:
         case TIME_ID_5M:
+        case TIME_ID_2M:
         case TIME_ID_1M:
             if (time_in_seconds >= 3600) {
                 time_remaining = seconds % 3600 / 60;
