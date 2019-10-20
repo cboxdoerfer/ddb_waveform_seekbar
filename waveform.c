@@ -1044,10 +1044,11 @@ waveform_motion_notify_event (GtkWidget *widget, GdkEventButton *event, gpointer
             || event->y < -DISTANCE_THRESHOLD
             || event->y > a.height + DISTANCE_THRESHOLD) {
             w->seekbar_moving = 0;
-            return TRUE;
         }
-        w->seekbar_moving = 1;
-        w->seekbar_move_x = event->x - a.x;
+        else {
+            w->seekbar_moving = 1;
+            w->seekbar_move_x = event->x - a.x;
+        }
         gtk_widget_queue_draw (w->drawarea);
     }
     return TRUE;
