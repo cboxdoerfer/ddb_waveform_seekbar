@@ -323,7 +323,7 @@ waveform_draw_cb (void *user_data)
 
     DB_playItem_t *trk = deadbeef->streamer_get_playing_track ();
     if (!trk) {
-        return;
+        return FALSE;
     }
     
     GtkAllocation a;
