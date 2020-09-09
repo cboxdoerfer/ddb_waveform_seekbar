@@ -111,7 +111,7 @@ waveform_data_render_build_sample (wavedata_t *wave_data,
     const int s_end = floorf (sample_size * end);
 
     int counter = 0;
-    for (int i = start; i < end; i++) {
+    for (int i = floor(start); i < ceil(end); i++) {
         for (int pos = i * sample_size; pos < s_end; pos += sample_size, counter++) {
             int index = pos + ch_offset;
             float s_max = (float)wave_data->data[index]/1000;
@@ -140,17 +140,17 @@ waveform_render_data_build (wavedata_t *wave_data, int width, bool downmix_mono)
 
     const int channels_render = CONFIG_MIX_TO_MONO ? 1 : channels_data;
     const int sample_size = VALUES_PER_SAMPLE * channels_data;
-    const float num_samples_per_x = wave_data->data_len / (float)(width * sample_size);
+    const double num_samples_per_x = wave_data->data_len / (double)(width * sample_size);
 
     waveform_data_render_t *w_render_ctx = waveform_data_render_new (channels_render, width);
 
     for (int ch = 0; ch < w_render_ctx->num_channels; ch++) {
         waveform_sample_t *samples = w_render_ctx->samples[ch];
 
-        int d_start = 0;
+        double d_start = 0.;
 
         for (int x = 0; x < width; x++) {
-            const int d_end = MAX (floorf ((x+1) * num_samples_per_x),1);
+            const double d_end = MAX ((x + 1) * num_samples_per_x, 1.);
             waveform_sample_t *sample = &samples[x];
 
             int counter = 0;
