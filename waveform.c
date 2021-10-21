@@ -1170,6 +1170,10 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
             playback_status = PLAYING;
             waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         }
+        break;
+    case DB_EV_SEEKED:
+        g_idle_add (waveform_redraw_cb, w);
+        g_idle_add (ruler_redraw_cb, w);
     }
     return 0;
 }
