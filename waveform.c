@@ -933,7 +933,9 @@ waveform_set_refresh_interval (gpointer user_data, int interval)
         g_source_remove (w->drawtimer);
         w->drawtimer = 0;
     }
-    w->drawtimer = g_timeout_add (interval, waveform_draw_cb, w);
+    if (playback_status == PLAYING) {
+        w->drawtimer = g_timeout_add (interval, waveform_draw_cb, w);
+    }
     return TRUE;
 }
 
