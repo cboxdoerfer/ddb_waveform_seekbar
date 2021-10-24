@@ -1273,6 +1273,15 @@ waveform_init (ddb_gtkui_widget_t *w)
     on_config_changed (w);
 }
 
+static void
+waveform_initmenu (struct ddb_gtkui_widget_s *w, GtkWidget *menu)
+{
+    GtkWidget *item = gtk_menu_item_new_with_mnemonic ("Configure");
+    gtk_container_add (GTK_CONTAINER (menu), item);
+    gtk_widget_show (item);
+    g_signal_connect_after ((gpointer) item, "activate", G_CALLBACK (on_button_config), w);
+}
+
 static ddb_gtkui_widget_t *
 waveform_create (void)
 {
@@ -1283,6 +1292,7 @@ waveform_create (void)
     w->base.init = waveform_init;
     w->base.destroy = waveform_destroy;
     w->base.message = waveform_message;
+    w->base.initmenu = waveform_initmenu;
     w->drawarea = gtk_drawing_area_new ();
     w->ruler = gtk_drawing_area_new ();
 #if !GTK_CHECK_VERSION(3,0,0)
@@ -1295,7 +1305,7 @@ waveform_create (void)
     gtk_menu_attach_to_widget (GTK_MENU (w->popup), w->base.widget, NULL);
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
-    gtk_widget_set_size_request (w->base.widget, 300, 96);
+    gtk_widget_set_size_request (w->base.widget, 300, -1);
     gtk_widget_set_size_request (w->ruler, -1, 20);
     gtk_widget_set_size_request (w->drawarea, -1, -1);
     gtk_widget_add_events (w->base.widget, GDK_SCROLL_MASK);
