@@ -687,7 +687,11 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                 .samplerate = fileinfo->fmt.samplerate,
                 .channelmask = fileinfo->fmt.channelmask,
                 .is_float = 1,
+#if (DDB_API_LEVEL >= 17)
+                .flags = 0,
+#else
                 .is_bigendian = 0
+#endif
             };
 
             int update_counter = 0;
@@ -1459,7 +1463,7 @@ static const char settings_dlg[] =
 ;
 
 static DB_misc_t plugin = {
-    //DB_PLUGIN_SET_API_VERSION
+    DB_PLUGIN_SET_API_VERSION
     .plugin.type            = DB_PLUGIN_MISC,
     .plugin.api_vmajor      = 1,
     .plugin.api_vminor      = 5,
