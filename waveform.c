@@ -325,7 +325,7 @@ waveform_draw_cb (void *user_data)
     if (!trk) {
         return FALSE;
     }
-    
+
     GtkAllocation a;
     gtk_widget_get_allocation (w->drawarea, &a);
     const int width = a.width;
@@ -687,7 +687,11 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                 .samplerate = fileinfo->fmt.samplerate,
                 .channelmask = fileinfo->fmt.channelmask,
                 .is_float = 1,
+#if (DDB_API_LEVEL >= 17)
+                .flags = 0,
+#else
                 .is_bigendian = 0
+#endif
             };
 
             int update_counter = 0;
@@ -933,7 +937,9 @@ waveform_set_refresh_interval (gpointer user_data, int interval)
         g_source_remove (w->drawtimer);
         w->drawtimer = 0;
     }
-    w->drawtimer = g_timeout_add (interval, waveform_draw_cb, w);
+    if (playback_status == PLAYING) {
+        w->drawtimer = g_timeout_add (interval, waveform_draw_cb, w);
+    }
     return TRUE;
 }
 
@@ -1168,6 +1174,10 @@ waveform_message (ddb_gtkui_widget_t *widget, uint32_t id, uintptr_t ctx, uint32
             playback_status = PLAYING;
             waveform_set_refresh_interval (w, CONFIG_REFRESH_INTERVAL);
         }
+        break;
+    case DB_EV_SEEKED:
+        g_idle_add (waveform_redraw_cb, w);
+        g_idle_add (ruler_redraw_cb, w);
     }
     return 0;
 }
@@ -1267,6 +1277,15 @@ waveform_init (ddb_gtkui_widget_t *w)
     on_config_changed (w);
 }
 
+static void
+waveform_initmenu (struct ddb_gtkui_widget_s *w, GtkWidget *menu)
+{
+    GtkWidget *item = gtk_menu_item_new_with_mnemonic ("Configure");
+    gtk_container_add (GTK_CONTAINER (menu), item);
+    gtk_widget_show (item);
+    g_signal_connect_after ((gpointer) item, "activate", G_CALLBACK (on_button_config), w);
+}
+
 static ddb_gtkui_widget_t *
 waveform_create (void)
 {
@@ -1277,6 +1296,7 @@ waveform_create (void)
     w->base.init = waveform_init;
     w->base.destroy = waveform_destroy;
     w->base.message = waveform_message;
+    w->base.initmenu = waveform_initmenu;
     w->drawarea = gtk_drawing_area_new ();
     w->ruler = gtk_drawing_area_new ();
 #if !GTK_CHECK_VERSION(3,0,0)
@@ -1289,7 +1309,7 @@ waveform_create (void)
     gtk_menu_attach_to_widget (GTK_MENU (w->popup), w->base.widget, NULL);
     w->popup_item = gtk_menu_item_new_with_mnemonic ("Configure");
     w->mutex = deadbeef->mutex_create ();
-    gtk_widget_set_size_request (w->base.widget, 300, 96);
+    gtk_widget_set_size_request (w->base.widget, 300, 5);
     gtk_widget_set_size_request (w->ruler, -1, 20);
     gtk_widget_set_size_request (w->drawarea, -1, -1);
     gtk_widget_add_events (w->base.widget, GDK_SCROLL_MASK);
@@ -1369,7 +1389,7 @@ waveform_disconnect (void)
 }
 
 static int
-waveform_action_lookup (DB_plugin_action_t *action, int ctx)
+waveform_action_lookup (DB_plugin_action_t *action, ddb_action_context_t ctx)
 {
     DB_playItem_t *it = NULL;
     deadbeef->pl_lock ();
@@ -1443,7 +1463,7 @@ static const char settings_dlg[] =
 ;
 
 static DB_misc_t plugin = {
-    //DB_PLUGIN_SET_API_VERSION
+    DB_PLUGIN_SET_API_VERSION
     .plugin.type            = DB_PLUGIN_MISC,
     .plugin.api_vmajor      = 1,
     .plugin.api_vminor      = 5,
