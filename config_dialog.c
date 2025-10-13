@@ -79,7 +79,10 @@ on_button_config (GtkMenuItem *menuitem, gpointer user_data)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     waveform_properties = gtk_dialog_new ();
-    gtk_window_set_transient_for (GTK_WINDOW (waveform_properties), gtk_widget_get_toplevel(menuitem));
+    GtkWidget *toplevel = gtk_widget_get_toplevel (GTK_WIDGET (menuitem));
+    if (GTK_IS_WINDOW (toplevel)) {
+        gtk_window_set_transient_for (GTK_WINDOW (waveform_properties), GTK_WINDOW (toplevel) );
+    }
     gtk_window_set_title (GTK_WINDOW (waveform_properties), "Waveform Properties");
     gtk_window_set_type_hint (GTK_WINDOW (waveform_properties), GDK_WINDOW_TYPE_HINT_DIALOG);
 
