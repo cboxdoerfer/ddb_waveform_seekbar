@@ -518,6 +518,13 @@ waveform_draw (void *user_data, int shaded)
     const int width = a.width;
     const int height = a.height;
 
+    // Lock the mutex to protect concurrent access to the cairo surfaces
+    // (w->surf, w->surf_shaded) and the wave sample data (w->wave).
+    // Without this, the background decode thread can modify w->wave->data
+    // while we read it, and the GTK draw event handler can read from the
+    // surfaces while we write to them, causing cairo assertion failures.
+    deadbeef->mutex_lock (w->mutex);
+
     w->width = width;
     w->height = height;
 
@@ -587,6 +594,8 @@ waveform_draw (void *user_data, int shaded)
     }
 
     cairo_destroy (cr);
+
+    deadbeef->mutex_unlock (w->mutex);
     return;
 }
 
@@ -687,7 +696,7 @@ waveform_generate_wavedata (gpointer user_data, DB_playItem_t *it, const char *u
                 .samplerate = fileinfo->fmt.samplerate,
                 .channelmask = fileinfo->fmt.channelmask,
                 .is_float = 1,
-                .is_bigendian = 0
+                .flags = 0
             };
 
             int update_counter = 0;
@@ -990,8 +999,12 @@ waveform_draw_generic_event (waveform_t *w, cairo_t *cr)
         .height = a.height,
     };
 
+    // Lock the mutex to prevent reading from the cairo surfaces
+    // (w->surf, w->surf_shaded) while waveform_draw is writing to them.
+    deadbeef->mutex_lock (w->mutex);
     waveform_scale (w, cr, &rect);
     waveform_seekbar_draw (w, cr, &rect);
+    deadbeef->mutex_unlock (w->mutex);
 }
 
 #if !GTK_CHECK_VERSION(3,0,0)
@@ -1369,7 +1382,7 @@ waveform_disconnect (void)
 }
 
 static int
-waveform_action_lookup (DB_plugin_action_t *action, int ctx)
+waveform_action_lookup (DB_plugin_action_t *action, ddb_action_context_t ctx)
 {
     DB_playItem_t *it = NULL;
     deadbeef->pl_lock ();
